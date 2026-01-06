@@ -1,0 +1,117 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace UtilityManagmentApi.DTOs.Admin;
+
+/// <summary>
+/// Admin Dashboard Summary DTO
+/// </summary>
+public class AdminDashboardDto
+{
+    // User Statistics
+    public int TotalUsers { get; set; }
+    public int ActiveUsers { get; set; }
+    public int PendingUsers { get; set; }
+    public Dictionary<string, int> UsersByRole { get; set; } = new();
+
+    // Utility Types Statistics
+    public int TotalUtilityTypes { get; set; }
+    public int ActiveUtilityTypes { get; set; }
+
+    // Tariff Plans Statistics
+    public int TotalTariffPlans { get; set; }
+    public int ActiveTariffPlans { get; set; }
+
+    // Billing Cycles Statistics
+    public int TotalBillingCycles { get; set; }
+    public string? CurrentBillingCycle { get; set; }
+
+  // Consumer Statistics
+    public int TotalConsumers { get; set; }
+    public int ActiveConsumers { get; set; }
+
+    // Connection Statistics
+  public int TotalConnections { get; set; }
+    public int ActiveConnections { get; set; }
+
+  // System Info
+    public DateTime LastUpdated { get; set; }
+}
+
+/// <summary>
+/// System Settings DTO
+/// </summary>
+public class SystemSettingsDto
+{
+    public int Id { get; set; }
+    public string SettingKey { get; set; } = string.Empty;
+    public string SettingValue { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string Category { get; set; } = string.Empty;
+    public DateTime LastModified { get; set; }
+    public string? ModifiedBy { get; set; }
+}
+
+public class UpdateSystemSettingDto
+{
+    [Required]
+    public string SettingValue { get; set; } = string.Empty;
+}
+
+public class CreateSystemSettingDto
+{
+    [Required]
+ [MaxLength(100)]
+    public string SettingKey { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(500)]
+    public string SettingValue { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? Description { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string Category { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Audit Log DTO
+/// </summary>
+public class AuditLogDto
+{
+    public int Id { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public string EntityType { get; set; } = string.Empty;
+    public int? EntityId { get; set; }
+    public string? OldValues { get; set; }
+    public string? NewValues { get; set; }
+    public int UserId { get; set; }
+    public string UserName { get; set; } = string.Empty;
+    public string UserRole { get; set; } = string.Empty;
+    public string? IpAddress { get; set; }
+    public DateTime Timestamp { get; set; }
+}
+
+public class AuditLogListDto
+{
+    public int Id { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public string EntityType { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; }
+}
+
+/// <summary>
+/// Recent Activity DTO for Admin Dashboard
+/// </summary>
+public class RecentActivityDto
+{
+    public int Id { get; set; }
+ public string ActivityType { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string PerformedBy { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; }
+    public string? EntityType { get; set; }
+    public int? EntityId { get; set; }
+}

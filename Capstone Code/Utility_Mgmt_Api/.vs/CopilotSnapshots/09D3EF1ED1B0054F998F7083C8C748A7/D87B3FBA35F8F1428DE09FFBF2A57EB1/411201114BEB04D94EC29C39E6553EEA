@@ -1,0 +1,107 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using Moq;
+using UtilityManagmentApi.Controllers;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Reports;
+using UtilityManagmentApi.Services.Interfaces;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Controllers;
+
+/// <summary>
+/// Unit tests for ReportsController
+/// </summary>
+public class ReportsControllerTests
+{
+    private readonly Mock<IReportService> _mockReportService;
+    private readonly ReportsController _controller;
+
+    public ReportsControllerTests()
+    {
+        _mockReportService = new Mock<IReportService>();
+        _controller = new ReportsController(_mockReportService.Object);
+    }
+
+    [Fact]
+    public async Task GetDashboardSummary_ReturnsOkResult()
+    {
+        // Arrange
+        var summary = new DashboardSummaryDto { TotalConsumers = 100, TotalBills = 500 };
+        _mockReportService.Setup(s => s.GetDashboardSummaryAsync()).ReturnsAsync(ApiResponse<DashboardSummaryDto>.SuccessResponse(summary));
+
+        // Act
+        var result = await _controller.GetDashboardSummary();
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetMonthlyRevenueReport_ReturnsOkResult()
+    {
+        // Arrange
+        var report = new MonthlyRevenueReportDto { Month = 1, Year = 2025, TotalBilledAmount = 50000 };
+        _mockReportService.Setup(s => s.GetMonthlyRevenueReportAsync(1, 2025)).ReturnsAsync(ApiResponse<MonthlyRevenueReportDto>.SuccessResponse(report));
+
+        // Act
+        var result = await _controller.GetMonthlyRevenueReport(1, 2025);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetYearlyRevenueReport_ReturnsOkResult()
+    {
+        // Arrange
+        var report = new YearlyRevenueReportDto { Year = 2025, TotalBilledAmount = 500000 };
+        _mockReportService.Setup(s => s.GetYearlyRevenueReportAsync(2025)).ReturnsAsync(ApiResponse<YearlyRevenueReportDto>.SuccessResponse(report));
+
+        // Act
+        var result = await _controller.GetYearlyRevenueReport(2025);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetOutstandingDuesReport_ReturnsOkResult()
+    {
+        // Arrange
+        var report = new OutstandingDuesReportDto { TotalOutstanding = 75000 };
+        _mockReportService.Setup(s => s.GetOutstandingDuesReportAsync()).ReturnsAsync(ApiResponse<OutstandingDuesReportDto>.SuccessResponse(report));
+
+        // Act
+        var result = await _controller.GetOutstandingDuesReport();
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetConsumerBillingSummary_ReturnsOkResult()
+    {
+        // Arrange
+        var summary = new ConsumerBillingSummaryDto { ConsumerId = 1, TotalBills = 12 };
+        _mockReportService.Setup(s => s.GetConsumerBillingSummaryAsync(1)).ReturnsAsync(ApiResponse<ConsumerBillingSummaryDto>.SuccessResponse(summary));
+
+        // Act
+        var result = await _controller.GetConsumerBillingSummary(1);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetConsumerBillingSummary_NotFound_ReturnsNotFound()
+    {
+        // Arrange
+        _mockReportService.Setup(s => s.GetConsumerBillingSummaryAsync(999)).ReturnsAsync(ApiResponse<ConsumerBillingSummaryDto>.ErrorResponse("Not found"));
+
+        // Act
+        var result = await _controller.GetConsumerBillingSummary(999);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+}

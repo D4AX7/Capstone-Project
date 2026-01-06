@@ -1,0 +1,157 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.ConnectionRequest;
+using UtilityManagmentApi.Services.Interfaces;
+using System.Security.Claims;
+
+namespace UtilityManagmentApi.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class ConnectionRequestsController : ControllerBase
+{
+    private readonly IConnectionRequestService _connectionRequestService;
+
+    public ConnectionRequestsController(IConnectionRequestService connectionRequestService)
+    {
+        _connectionRequestService = connectionRequestService;
+    }
+
+    /// <summary>
+    /// Get available utilities that consumer can request - Consumer only
+    /// </summary>
+ [HttpGet("available-utilities")]
+    [Authorize(Roles = "Consumer")]
+    public async Task<IActionResult> GetAvailableUtilities()
+    {
+        var userId = GetCurrentUserId();
+  var result = await _connectionRequestService.GetAvailableUtilitiesAsync(userId);
+        return Ok(result);
+    }
+
+    /// <summary>
+ /// Create a new connection request - Consumer only
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = "Consumer")]
+    public async Task<IActionResult> CreateRequest([FromBody] CreateConnectionRequestDto dto)
+    {
+     var userId = GetCurrentUserId();
+      var result = await _connectionRequestService.CreateRequestAsync(userId, dto);
+      if (!result.Success)
+        {
+         return BadRequest(result);
+        }
+        return CreatedAtAction(nameof(GetMyRequests), result);
+    }
+
+    /// <summary>
+    /// Get my connection requests - Consumer only
+    /// </summary>
+    [HttpGet("my-requests")]
+    [Authorize(Roles = "Consumer")]
+    public async Task<IActionResult> GetMyRequests()
+    {
+        var userId = GetCurrentUserId();
+ var result = await _connectionRequestService.GetMyRequestsAsync(userId);
+    return Ok(result);
+    }
+
+    /// <summary>
+    /// Cancel a pending connection request - Consumer only
+    /// </summary>
+    [HttpPost("{id}/cancel")]
+    [Authorize(Roles = "Consumer")]
+    public async Task<IActionResult> CancelRequest(int id)
+  {
+ var userId = GetCurrentUserId();
+        var result = await _connectionRequestService.CancelRequestAsync(userId, id);
+   if (!result.Success)
+  {
+            return BadRequest(result);
+}
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get all connection requests - Admin only
+/// </summary>
+    [HttpGet]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetAllRequests(
+      [FromQuery] PaginationParams paginationParams,
+        [FromQuery] string? status = null)
+    {
+    var result = await _connectionRequestService.GetAllRequestsAsync(paginationParams, status);
+return Ok(result);
+    }
+
+    /// <summary>
+    /// Get pending connection requests - Admin only
+    /// </summary>
+ [HttpGet("pending")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetPendingRequests()
+    {
+        var result = await _connectionRequestService.GetPendingRequestsAsync();
+  return Ok(result);
+    }
+
+    /// <summary>
+    /// Get connection request by ID - Admin or the requesting Consumer
+    /// </summary>
+    [HttpGet("{id}")]
+    [Authorize(Roles = "Admin,Consumer")]
+    public async Task<IActionResult> GetRequestById(int id)
+    {
+        var result = await _connectionRequestService.GetRequestByIdAsync(id);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+
+        // If consumer, verify they own this request
+     if (User.IsInRole("Consumer"))
+     {
+         var userId = GetCurrentUserId();
+            // Get consumer from request to verify ownership
+            if (result.Data?.ConsumerId != await GetConsumerIdFromUserIdAsync(userId))
+      {
+         return Forbid();
+            }
+        }
+
+        return Ok(result);
+ }
+
+    /// <summary>
+    /// Process (approve/reject) a connection request - Admin only
+    /// </summary>
+    [HttpPost("{id}/process")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ProcessRequest(int id, [FromBody] ProcessConnectionRequestDto dto)
+    {
+ var adminUserId = GetCurrentUserId();
+        var result = await _connectionRequestService.ProcessRequestAsync(id, adminUserId, dto);
+        if (!result.Success)
+        {
+          return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    private int GetCurrentUserId()
+    {
+    var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("userId");
+        return int.Parse(userIdClaim!.Value);
+    }
+
+    private async Task<int?> GetConsumerIdFromUserIdAsync(int userId)
+    {
+   // This is a simple helper - in production you might inject IConsumerService
+        var requestResult = await _connectionRequestService.GetMyRequestsAsync(userId);
+   return requestResult.Data?.FirstOrDefault()?.ConsumerId;
+    }
+}

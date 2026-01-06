@@ -1,0 +1,576 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using Moq;
+using UtilityManagmentApi.Controllers;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Reports;
+using UtilityManagmentApi.Services.Interfaces;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Controllers;
+
+/// <summary>
+/// Unit tests for ReportsController - Tests dashboard and reporting endpoints
+/// Demonstrates LINQ aggregation queries for total revenue, outstanding dues, and average consumption
+/// </summary>
+public class ReportsControllerTests
+{
+    private readonly Mock<IReportService> _mockReportService;
+ private readonly ReportsController _controller;
+
+    public ReportsControllerTests()
+    {
+   _mockReportService = new Mock<IReportService>();
+     _controller = new ReportsController(_mockReportService.Object);
+    }
+
+#region Dashboard Summary Tests
+
+    [Fact]
+    public async Task GetDashboardSummary_ReturnsOkResult_WithDashboardData()
+{
+        // Arrange
+  var dashboardSummary = new DashboardSummaryDto
+        {
+            TotalConsumers = 100,
+     ActiveConnections = 150,
+    TotalBills = 500,
+ PendingBills = 50,
+    OverdueBills = 20,
+  TotalRevenueThisMonth = 50000.00m,
+     TotalOutstanding = 15000.00m,
+     TotalCollected = 35000.00m,
+     TotalBilled = 50000.00m,
+            ConsumptionByUtilityType = new List<UtilityConsumptionDto>
+       {
+         new UtilityConsumptionDto { UtilityType = "Electricity", TotalConsumption = 250000, Unit = "kWh" },
+     new UtilityConsumptionDto { UtilityType = "Water", TotalConsumption = 500000, Unit = "Gallons" }
+     },
+            RevenueByUtilityType = new List<UtilityRevenueDto>
+     {
+       new UtilityRevenueDto { UtilityType = "Electricity", BilledAmount = 30000m, Collected = 25000m },
+new UtilityRevenueDto { UtilityType = "Water", BilledAmount = 20000m, Collected = 10000m }
+            }
+  };
+
+    _mockReportService.Setup(s => s.GetDashboardSummaryAsync())
+    .ReturnsAsync(ApiResponse<DashboardSummaryDto>.SuccessResponse(dashboardSummary));
+
+ // Act
+     var result = await _controller.GetDashboardSummary();
+
+ // Assert
+  var okResult = Assert.IsType<OkObjectResult>(result);
+  var response = Assert.IsType<ApiResponse<DashboardSummaryDto>>(okResult.Value);
+      Assert.True(response.Success);
+        Assert.Equal(100, response.Data?.TotalConsumers);
+  Assert.Equal(150, response.Data?.ActiveConnections);
+  Assert.Equal(50000.00m, response.Data?.TotalRevenueThisMonth);
+    }
+
+    #endregion
+
+    #region Monthly Revenue Report Tests
+
+    [Fact]
+    public async Task GetMonthlyRevenueReport_WithValidMonthYear_ReturnsOkResult()
+{
+   // Arrange
+     var report = new MonthlyRevenueReportDto
+        {
+   Month = 1,
+            Year = 2025,
+         MonthName = "January",
+  TotalBilledAmount = 50000.00m,
+ TotalCollected = 35000.00m,
+      TotalOutstanding = 15000.00m,
+     TotalBills = 100,
+      PaidBills = 70,
+     CollectionRate = 70.00m,
+            ByUtilityType = new List<UtilityRevenueDto>
+  {
+           new UtilityRevenueDto { UtilityType = "Electricity", BilledAmount = 30000m, Collected = 22000m },
+        new UtilityRevenueDto { UtilityType = "Water", BilledAmount = 15000m, Collected = 10000m },
+ new UtilityRevenueDto { UtilityType = "Gas", BilledAmount = 5000m, Collected = 3000m }
+   }
+      };
+
+   _mockReportService.Setup(s => s.GetMonthlyRevenueReportAsync(1, 2025))
+     .ReturnsAsync(ApiResponse<MonthlyRevenueReportDto>.SuccessResponse(report));
+
+        // Act
+       var result = await _controller.GetMonthlyRevenueReport(1, 2025);
+
+      // Assert
+var okResult = Assert.IsType<OkObjectResult>(result);
+   var response = Assert.IsType<ApiResponse<MonthlyRevenueReportDto>>(okResult.Value);
+  Assert.True(response.Success);
+    Assert.Equal("January", response.Data?.MonthName);
+        Assert.Equal(50000.00m, response.Data?.TotalBilledAmount);
+   Assert.Equal(70.00m, response.Data?.CollectionRate);
+    }
+
+    [Fact]
+    public async Task GetMonthlyRevenueReport_WithNoData_ReturnsEmptyReport()
+    {
+      // Arrange
+   var report = new MonthlyRevenueReportDto
+ {
+         Month = 6,
+Year = 2030,
+    MonthName = "June",
+            TotalBilledAmount = 0,
+    TotalCollected = 0,
+     TotalOutstanding = 0,
+     TotalBills = 0,
+   PaidBills = 0,
+  CollectionRate = 0
+ };
+
+        _mockReportService.Setup(s => s.GetMonthlyRevenueReportAsync(6, 2030))
+       .ReturnsAsync(ApiResponse<MonthlyRevenueReportDto>.SuccessResponse(report));
+
+    // Act
+   var result = await _controller.GetMonthlyRevenueReport(6, 2030);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+      var response = Assert.IsType<ApiResponse<MonthlyRevenueReportDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal(0, response.Data?.TotalBills);
+    }
+
+    #endregion
+
+#region Yearly Revenue Report Tests
+
+    [Fact]
+    public async Task GetYearlyRevenueReport_ReturnsOkResult_WithMonthlyBreakdown()
+    {
+      // Arrange
+        var reports = new List<MonthlyRevenueReportDto>
+     {
+     new MonthlyRevenueReportDto 
+     { 
+        Month = 1, 
+  Year = 2025, 
+             MonthName = "January",
+  TotalBilledAmount = 50000.00m,
+         TotalCollected = 40000.00m
+            },
+  new MonthlyRevenueReportDto 
+        { 
+     Month = 2, 
+   Year = 2025, 
+   MonthName = "February",
+    TotalBilledAmount = 55000.00m,
+ TotalCollected = 45000.00m
+          },
+     new MonthlyRevenueReportDto 
+      { 
+          Month = 3, 
+  Year = 2025, 
+ MonthName = "March",
+     TotalBilledAmount = 60000.00m,
+         TotalCollected = 50000.00m
+   }
+     };
+
+        _mockReportService.Setup(s => s.GetYearlyRevenueReportAsync(2025))
+         .ReturnsAsync(ApiResponse<List<MonthlyRevenueReportDto>>.SuccessResponse(reports));
+
+        // Act
+    var result = await _controller.GetYearlyRevenueReport(2025);
+
+     // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<List<MonthlyRevenueReportDto>>>(okResult.Value);
+        Assert.True(response.Success);
+     Assert.Equal(3, response.Data?.Count);
+        
+        // Verify total revenue aggregation (LINQ demonstration)
+        var totalRevenue = response.Data?.Sum(r => r.TotalBilledAmount);
+  Assert.Equal(165000.00m, totalRevenue);
+    }
+
+    #endregion
+
+    #region Outstanding Dues Report Tests
+
+    [Fact]
+ public async Task GetOutstandingDuesReport_ReturnsOkResult()
+ {
+     // Arrange
+        var report = new OutstandingDuesReportDto
+        {
+  TotalOutstanding = 75000.00m,
+       TotalOverdueAccounts = 25,
+            ByAgeBucket = new List<OutstandingByAgeDto>
+       {
+    new OutstandingByAgeDto { AgeBucket = "0-30 days", Amount = 30000m, Count = 15 },
+new OutstandingByAgeDto { AgeBucket = "31-60 days", Amount = 25000m, Count = 7 },
+     new OutstandingByAgeDto { AgeBucket = "61-90 days", Amount = 15000m, Count = 2 },
+  new OutstandingByAgeDto { AgeBucket = "90+ days", Amount = 5000m, Count = 1 }
+            },
+     TopDefaulters = new List<ConsumerOutstandingDto>
+      {
+new ConsumerOutstandingDto 
+     { 
+ ConsumerId = 1, 
+          ConsumerNumber = "CON240001",
+       ConsumerName = "Michael Brown",
+OutstandingAmount = 5000m,
+  OverdueBills = 3
+   },
+          new ConsumerOutstandingDto 
+      { 
+     ConsumerId = 2, 
+     ConsumerNumber = "CON240002",
+          ConsumerName = "Emily Davis",
+        OutstandingAmount = 3500m,
+      OverdueBills = 2
+         }
+  }
+        };
+
+_mockReportService.Setup(s => s.GetOutstandingDuesReportAsync())
+            .ReturnsAsync(ApiResponse<OutstandingDuesReportDto>.SuccessResponse(report));
+
+   // Act
+        var result = await _controller.GetOutstandingDuesReport();
+
+ // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+   var response = Assert.IsType<ApiResponse<OutstandingDuesReportDto>>(okResult.Value);
+     Assert.True(response.Success);
+        Assert.Equal(75000.00m, response.Data?.TotalOutstanding);
+Assert.Equal(25, response.Data?.TotalOverdueAccounts);
+        Assert.Equal(4, response.Data?.ByAgeBucket.Count);
+    }
+
+    #endregion
+
+    #region Consumption Report Tests
+
+    [Fact]
+    public async Task GetConsumptionReport_ReturnsOkResult_WithConsumptionData()
+    {
+        // Arrange
+        var report = new ConsumptionReportDto
+        {
+     Month = 1,
+       Year = 2025,
+   TotalConsumption = 750000,
+        AverageConsumption = 5000,
+    ByUtilityType = new List<UtilityConsumptionDetailDto>
+    {
+      new UtilityConsumptionDetailDto 
+   { 
+  UtilityType = "Electricity", 
+        Unit = "kWh",
+  TotalConsumption = 250000,
+      AverageConsumption = 2500,
+           MinConsumption = 100,
+     MaxConsumption = 10000,
+     ConnectionCount = 100
+                },
+     new UtilityConsumptionDetailDto 
+        { 
+      UtilityType = "Water", 
+   Unit = "Gallons",
+             TotalConsumption = 500000,
+   AverageConsumption = 5000,
+      MinConsumption = 500,
+       MaxConsumption = 25000,
+       ConnectionCount = 100
+      }
+    },
+         TopConsumers = new List<TopConsumerDto>
+       {
+   new TopConsumerDto 
+               { 
+   ConsumerId = 1, 
+      ConsumerName = "David Wilson",
+  UtilityType = "Electricity",
+     Consumption = 10000,
+Unit = "kWh"
+                }
+            }
+        };
+
+        _mockReportService.Setup(s => s.GetConsumptionReportAsync(1, 2025))
+      .ReturnsAsync(ApiResponse<ConsumptionReportDto>.SuccessResponse(report));
+
+   // Act
+        var result = await _controller.GetConsumptionReport(1, 2025);
+
+    // Assert
+var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<ConsumptionReportDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal(750000, response.Data?.TotalConsumption);
+        Assert.Equal(5000, response.Data?.AverageConsumption);
+        Assert.Equal(2, response.Data?.ByUtilityType.Count);
+    }
+
+    #endregion
+
+    #region Consumer Billing Summary Tests
+
+    [Fact]
+    public async Task GetConsumerBillingSummary_WithValidConsumerId_ReturnsOkResult()
+    {
+        // Arrange
+        var summary = new ConsumerBillingSummaryDto
+    {
+     ConsumerId = 1,
+            ConsumerNumber = "CON240001",
+   ConsumerName = "Michael Brown",
+    TotalBills = 12,
+         TotalBilledAmount = 1500.00m,
+     TotalPaid = 1200.00m,
+    OutstandingBalance = 300.00m,
+ Connections = new List<ConnectionBillingSummaryDto>
+   {
+              new ConnectionBillingSummaryDto 
+     { 
+      ConnectionId = 1,
+         ConnectionNumber = "ELE240001",
+         UtilityType = "Electricity",
+         BillCount = 6,
+    TotalBilled = 900m,
+           TotalPaid = 750m,
+  Outstanding = 150m,
+     TotalConsumption = 3000
+         },
+   new ConnectionBillingSummaryDto 
+      { 
+     ConnectionId = 2,
+         ConnectionNumber = "WAT240001",
+       UtilityType = "Water",
+   BillCount = 6,
+       TotalBilled = 600m,
+          TotalPaid = 450m,
+     Outstanding = 150m,
+    TotalConsumption = 4500
+     }
+        }
+    };
+
+        _mockReportService.Setup(s => s.GetConsumerBillingSummaryAsync(1))
+        .ReturnsAsync(ApiResponse<ConsumerBillingSummaryDto>.SuccessResponse(summary));
+
+   // Act
+       var result = await _controller.GetConsumerBillingSummary(1);
+
+ // Assert
+   var okResult = Assert.IsType<OkObjectResult>(result);
+     var response = Assert.IsType<ApiResponse<ConsumerBillingSummaryDto>>(okResult.Value);
+  Assert.True(response.Success);
+        Assert.Equal("CON240001", response.Data?.ConsumerNumber);
+  Assert.Equal(12, response.Data?.TotalBills);
+      Assert.Equal(2, response.Data?.Connections.Count);
+    }
+
+ [Fact]
+    public async Task GetConsumerBillingSummary_WithInvalidConsumerId_ReturnsNotFound()
+    {
+        // Arrange
+    _mockReportService.Setup(s => s.GetConsumerBillingSummaryAsync(999))
+     .ReturnsAsync(ApiResponse<ConsumerBillingSummaryDto>.ErrorResponse("Consumer not found"));
+
+        // Act
+        var result = await _controller.GetConsumerBillingSummary(999);
+
+        // Assert
+        var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<ConsumerBillingSummaryDto>>(notFoundResult.Value);
+        Assert.False(response.Success);
+    }
+
+    #endregion
+
+    #region Collection Report Tests
+
+    [Fact]
+    public async Task GetCollectionReport_WithValidDateRange_ReturnsOkResult()
+    {
+  // Arrange
+        var fromDate = new DateTime(2025, 1, 1);
+     var toDate = new DateTime(2025, 1, 31);
+
+        var report = new CollectionReportDto
+    {
+    FromDate = fromDate,
+ ToDate = toDate,
+      TotalCollected = 35000.00m,
+     DailyCollections = new List<DailyCollectionDto>
+{
+  new DailyCollectionDto { Date = new DateTime(2025, 1, 5), Amount = 5000m, PaymentCount = 10 },
+   new DailyCollectionDto { Date = new DateTime(2025, 1, 10), Amount = 8000m, PaymentCount = 15 },
+   new DailyCollectionDto { Date = new DateTime(2025, 1, 15), Amount = 12000m, PaymentCount = 25 },
+     new DailyCollectionDto { Date = new DateTime(2025, 1, 20), Amount = 10000m, PaymentCount = 20 }
+   },
+        ByPaymentMethod = new List<PaymentMethodCollectionDto>
+   {
+   new PaymentMethodCollectionDto { PaymentMethod = "Cash", Amount = 15000m, Count = 30, Percentage = 42.86m },
+   new PaymentMethodCollectionDto { PaymentMethod = "Online", Amount = 12000m, Count = 25, Percentage = 34.29m },
+   new PaymentMethodCollectionDto { PaymentMethod = "Card", Amount = 8000m, Count = 15, Percentage = 22.86m }
+     }
+        };
+
+        _mockReportService.Setup(s => s.GetCollectionReportAsync(fromDate, toDate))
+   .ReturnsAsync(ApiResponse<CollectionReportDto>.SuccessResponse(report));
+
+ // Act
+ var result = await _controller.GetCollectionReport(fromDate, toDate);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+   var response = Assert.IsType<ApiResponse<CollectionReportDto>>(okResult.Value);
+  Assert.True(response.Success);
+  Assert.Equal(35000.00m, response.Data?.TotalCollected);
+  Assert.Equal(4, response.Data?.DailyCollections.Count);
+     Assert.Equal(3, response.Data?.ByPaymentMethod.Count);
+    }
+
+  #endregion
+
+    #region LINQ Aggregation Demonstration Tests
+
+    /// <summary>
+    /// Demonstrates LINQ aggregation for Total Revenue per Month
+ /// </summary>
+    [Fact]
+  public async Task GetYearlyReport_DemonstratesLinqAggregation_TotalRevenuePerMonth()
+    {
+        // Arrange
+        var monthlyReports = new List<MonthlyRevenueReportDto>
+     {
+   new MonthlyRevenueReportDto { Month = 1, Year = 2025, MonthName = "January", TotalBilledAmount = 50000m, TotalCollected = 40000m },
+      new MonthlyRevenueReportDto { Month = 2, Year = 2025, MonthName = "February", TotalBilledAmount = 55000m, TotalCollected = 45000m },
+         new MonthlyRevenueReportDto { Month = 3, Year = 2025, MonthName = "March", TotalBilledAmount = 60000m, TotalCollected = 50000m },
+new MonthlyRevenueReportDto { Month = 4, Year = 2025, MonthName = "April", TotalBilledAmount = 52000m, TotalCollected = 42000m },
+     new MonthlyRevenueReportDto { Month = 5, Year = 2025, MonthName = "May", TotalBilledAmount = 58000m, TotalCollected = 48000m },
+            new MonthlyRevenueReportDto { Month = 6, Year = 2025, MonthName = "June", TotalBilledAmount = 62000m, TotalCollected = 52000m }
+        };
+
+_mockReportService.Setup(s => s.GetYearlyRevenueReportAsync(2025))
+ .ReturnsAsync(ApiResponse<List<MonthlyRevenueReportDto>>.SuccessResponse(monthlyReports));
+
+     // Act
+     var result = await _controller.GetYearlyRevenueReport(2025);
+
+  // Assert
+      var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<List<MonthlyRevenueReportDto>>>(okResult.Value);
+
+        // LINQ Aggregation: Total Revenue per Month
+        var totalRevenue = response.Data!.Sum(r => r.TotalBilledAmount);
+        Assert.Equal(337000m, totalRevenue);
+
+        // LINQ: Average Revenue per Month
+        var avgRevenue = response.Data!.Average(r => r.TotalBilledAmount);
+        Assert.Equal(56166.67m, Math.Round(avgRevenue, 2));
+
+   // LINQ: Month with highest revenue
+        var maxRevenueMonth = response.Data!.OrderByDescending(r => r.TotalBilledAmount).First();
+        Assert.Equal("June", maxRevenueMonth.MonthName);
+    }
+
+    /// <summary>
+    /// Demonstrates LINQ filtering and sorting of bills
+    /// </summary>
+    [Fact]
+    public void LinqDemonstration_FilteringAndSortingBills()
+    {
+        // Arrange - Simulated bill data
+        var bills = new List<BillTestData>
+        {
+   new BillTestData { Id = 1, ConsumerName = "Michael", Status = "Paid", Amount = 150m, DueDate = new DateTime(2025, 1, 20) },
+new BillTestData { Id = 2, ConsumerName = "Emily", Status = "Overdue", Amount = 200m, DueDate = new DateTime(2025, 1, 15) },
+ new BillTestData { Id = 3, ConsumerName = "David", Status = "Due", Amount = 175m, DueDate = new DateTime(2025, 1, 25) },
+            new BillTestData { Id = 4, ConsumerName = "Jessica", Status = "Paid", Amount = 125m, DueDate = new DateTime(2025, 1, 18) },
+   new BillTestData { Id = 5, ConsumerName = "Robert", Status = "Overdue", Amount = 300m, DueDate = new DateTime(2025, 1, 10) }
+   };
+
+        // LINQ: Filter overdue bills
+   var overdueBills = bills.Where(b => b.Status == "Overdue").ToList();
+     Assert.Equal(2, overdueBills.Count);
+
+  // LINQ: Sort by amount descending
+        var sortedByAmount = bills.OrderByDescending(b => b.Amount).ToList();
+        Assert.Equal("Robert", sortedByAmount.First().ConsumerName);
+        Assert.Equal(300m, sortedByAmount.First().Amount);
+
+        // LINQ: Outstanding dues (sum of non-paid bills)
+        var outstandingDues = bills.Where(b => b.Status != "Paid").Sum(b => b.Amount);
+        Assert.Equal(675m, outstandingDues);
+
+    // LINQ: Average bill amount
+        var avgAmount = bills.Average(b => b.Amount);
+ Assert.Equal(190m, avgAmount);
+    }
+
+    /// <summary>
+    /// Demonstrates LINQ aggregation for Average Consumption
+ /// </summary>
+    [Fact]
+    public void LinqDemonstration_AverageConsumptionCalculation()
+    {
+ // Arrange - Simulated meter reading data
+        var readings = new List<MeterReadingTestData>
+        {
+         new MeterReadingTestData { ConnectionId = 1, UtilityType = "Electricity", UnitsConsumed = 500 },
+   new MeterReadingTestData { ConnectionId = 2, UtilityType = "Electricity", UnitsConsumed = 750 },
+    new MeterReadingTestData { ConnectionId = 3, UtilityType = "Electricity", UnitsConsumed = 300 },
+            new MeterReadingTestData { ConnectionId = 4, UtilityType = "Water", UnitsConsumed = 1000 },
+            new MeterReadingTestData { ConnectionId = 5, UtilityType = "Water", UnitsConsumed = 1500 },
+      new MeterReadingTestData { ConnectionId = 6, UtilityType = "Gas", UnitsConsumed = 200 }
+  };
+
+        // LINQ: Average consumption overall
+        var avgConsumption = readings.Average(r => r.UnitsConsumed);
+        Assert.Equal(708.33m, Math.Round(avgConsumption, 2));
+
+        // LINQ: Average consumption by utility type (GroupBy)
+     var avgByUtility = readings
+ .GroupBy(r => r.UtilityType)
+    .Select(g => new { UtilityType = g.Key, AvgConsumption = g.Average(r => r.UnitsConsumed) })
+  .ToList();
+
+        var electricityAvg = avgByUtility.First(u => u.UtilityType == "Electricity").AvgConsumption;
+    var waterAvg = avgByUtility.First(u => u.UtilityType == "Water").AvgConsumption;
+  var gasAvg = avgByUtility.First(u => u.UtilityType == "Gas").AvgConsumption;
+
+        Assert.Equal(516.67m, Math.Round(electricityAvg, 2));
+   Assert.Equal(1250m, waterAvg);
+        Assert.Equal(200m, gasAvg);
+
+   // LINQ: Total consumption by utility type
+        var totalByUtility = readings
+            .GroupBy(r => r.UtilityType)
+.Select(g => new { UtilityType = g.Key, TotalConsumption = g.Sum(r => r.UnitsConsumed) })
+  .ToList();
+
+  Assert.Equal(1550m, totalByUtility.First(u => u.UtilityType == "Electricity").TotalConsumption);
+    }
+
+    #endregion
+
+    // Helper test data classes for LINQ demonstrations
+    private class BillTestData
+    {
+    public int Id { get; set; }
+        public string ConsumerName { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public DateTime DueDate { get; set; }
+}
+
+    private class MeterReadingTestData
+{
+ public int ConnectionId { get; set; }
+        public string UtilityType { get; set; } = string.Empty;
+        public decimal UnitsConsumed { get; set; }
+    }
+}

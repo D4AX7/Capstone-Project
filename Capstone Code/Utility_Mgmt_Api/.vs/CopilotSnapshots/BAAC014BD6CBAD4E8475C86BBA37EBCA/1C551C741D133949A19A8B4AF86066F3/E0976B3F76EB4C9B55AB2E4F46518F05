@@ -1,0 +1,53 @@
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace UtilityManagmentApi.Entities;
+
+public class MeterReading
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    public int ConnectionId { get; set; }
+
+    [Required]
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal PreviousReading { get; set; }
+
+    [Required]
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal CurrentReading { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal UnitsConsumed { get; set; }
+
+    [Required]
+    public DateTime ReadingDate { get; set; }
+
+    [Required]
+    public int BillingMonth { get; set; }
+
+    [Required]
+    public int BillingYear { get; set; }
+
+    public int? ReadByUserId { get; set; }
+
+    [MaxLength(500)]
+    public string? Notes { get; set; }
+
+    public bool IsEstimated { get; set; } = false;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAt { get; set; }
+
+    // Navigation properties
+    [ForeignKey("ConnectionId")]
+    public Connection Connection { get; set; } = null!;
+
+    [ForeignKey("ReadByUserId")]
+    public User? ReadByUser { get; set; }
+
+    public Bill? Bill { get; set; }
+}

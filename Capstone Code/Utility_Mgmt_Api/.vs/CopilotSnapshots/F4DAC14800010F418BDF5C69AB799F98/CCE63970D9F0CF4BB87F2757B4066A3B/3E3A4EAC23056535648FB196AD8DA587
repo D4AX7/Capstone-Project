@@ -1,0 +1,167 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Payment;
+using UtilityManagmentApi.Services.Interfaces;
+using System.Security.Claims;
+
+namespace UtilityManagmentApi.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class PaymentsController : ControllerBase
+{
+    private readonly IPaymentService _paymentService;
+    private readonly IConsumerService _consumerService;
+
+    public PaymentsController(IPaymentService paymentService, IConsumerService consumerService)
+    {
+        _paymentService = paymentService;
+        _consumerService = consumerService;
+    }
+
+    /// <summary>
+    /// Get All Payments - Admin, AccountOfficer
+    /// </summary>
+    [HttpGet]
+    [Authorize(Roles = "Admin,AccountOfficer")]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] PaginationParams paginationParams,
+        [FromQuery] string? paymentMethod = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null)
+    {
+        var result = await _paymentService.GetAllAsync(paginationParams, paymentMethod, fromDate, toDate);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Payment by ID - Admin, AccountOfficer
+    /// </summary>
+    [HttpGet("{id}")]
+    [Authorize(Roles = "Admin,AccountOfficer")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var result = await _paymentService.GetByIdAsync(id);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Payment by Number - Admin, AccountOfficer
+    /// </summary>
+    [HttpGet("number/{paymentNumber}")]
+    [Authorize(Roles = "Admin,AccountOfficer")]
+    public async Task<IActionResult> GetByPaymentNumber(string paymentNumber)
+    {
+        var result = await _paymentService.GetByPaymentNumberAsync(paymentNumber);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Payments by Bill - Admin, AccountOfficer, Consumer (own)
+    /// </summary>
+    [HttpGet("bill/{billId}")]
+    [Authorize(Roles = "Admin,AccountOfficer,Consumer")]
+    public async Task<IActionResult> GetByBillId(int billId)
+    {
+        var result = await _paymentService.GetByBillIdAsync(billId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Payments by Consumer - Admin, AccountOfficer, Consumer (own)
+    /// </summary>
+    [HttpGet("consumer/{consumerId}")]
+    [Authorize(Roles = "Admin,AccountOfficer,Consumer")]
+    public async Task<IActionResult> GetByConsumerId(int consumerId)
+    {
+        // Consumer can only view their own payments
+        if (User.IsInRole("Consumer"))
+        {
+            var userId = GetCurrentUserId();
+            var consumer = await _consumerService.GetByUserIdAsync(userId);
+            if (!consumer.Success || consumer.Data!.Id != consumerId)
+            {
+                return Forbid();
+            }
+        }
+
+        var result = await _paymentService.GetByConsumerIdAsync(consumerId);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get My Payments - Consumer only (view own payment history)
+    /// </summary>
+    [HttpGet("my-payments")]
+    [Authorize(Roles = "Consumer")]
+    public async Task<IActionResult> GetMyPayments()
+    {
+        var userId = GetCurrentUserId();
+        var consumer = await _consumerService.GetByUserIdAsync(userId);
+        if (!consumer.Success)
+        {
+            return NotFound(consumer);
+        }
+
+        var result = await _paymentService.GetByConsumerIdAsync(consumer.Data!.Id);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Payment Summary - Admin, AccountOfficer
+    /// </summary>
+    [HttpGet("summary")]
+    [Authorize(Roles = "Admin,AccountOfficer")]
+    public async Task<IActionResult> GetSummary([FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null)
+    {
+        var result = await _paymentService.GetSummaryAsync(fromDate, toDate);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Record Payment - Admin, AccountOfficer
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = "Admin,AccountOfficer")]
+    public async Task<IActionResult> Create([FromBody] CreatePaymentDto dto)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _paymentService.CreateAsync(dto, userId);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
+    }
+
+    /// <summary>
+    /// Update Payment Status - Admin, AccountOfficer
+    /// </summary>
+    [HttpPut("{id}/status")]
+    [Authorize(Roles = "Admin,AccountOfficer")]
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdatePaymentStatusDto dto)
+    {
+        var result = await _paymentService.UpdateStatusAsync(id, dto);
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    private int GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("userId");
+        return int.Parse(userIdClaim!.Value);
+    }
+}

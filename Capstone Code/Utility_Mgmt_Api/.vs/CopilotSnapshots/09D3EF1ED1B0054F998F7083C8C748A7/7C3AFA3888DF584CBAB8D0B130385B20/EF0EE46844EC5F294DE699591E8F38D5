@@ -1,0 +1,231 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using System.Security.Claims;
+using UtilityManagmentApi.Controllers;
+using UtilityManagmentApi.DTOs.Bill;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Consumer;
+using UtilityManagmentApi.Services.Interfaces;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Controllers;
+
+/// <summary>
+/// Unit tests for BillsController - Tests billing and invoice generation endpoints
+/// </summary>
+public class BillsControllerTests
+{
+    private readonly Mock<IBillService> _mockBillService;
+    private readonly Mock<IConsumerService> _mockConsumerService;
+    private readonly BillsController _controller;
+
+    public BillsControllerTests()
+    {
+    _mockBillService = new Mock<IBillService>();
+        _mockConsumerService = new Mock<IConsumerService>();
+        _controller = new BillsController(_mockBillService.Object, _mockConsumerService.Object);
+    }
+
+    private void SetupUserClaims(int userId, string role)
+    {
+  var claims = new List<Claim>
+        {
+     new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Role, role)
+        };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+  var claimsPrincipal = new ClaimsPrincipal(identity);
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = claimsPrincipal }
+    };
+    }
+
+    #region GetAll Bills Tests
+
+    [Fact]
+    public async Task GetAll_ReturnsOkResult_WithBillsList()
+    {
+   // Arrange
+        var paginationParams = new PaginationParams { PageNumber = 1, PageSize = 10 };
+        var bills = new List<BillListDto>
+        {
+   new BillListDto { Id = 1, BillNumber = "BILL001", TotalAmount = 150.00m, Status = "Due" },
+  new BillListDto { Id = 2, BillNumber = "BILL002", TotalAmount = 200.00m, Status = "Paid" }
+ };
+
+        var pagedResponse = new PagedResponse<BillListDto>
+        {
+    Data = bills,
+       TotalRecords = 2,
+          PageNumber = 1,
+   PageSize = 10
+        };
+
+        _mockBillService.Setup(s => s.GetAllAsync(paginationParams, null, null, null))
+     .ReturnsAsync(pagedResponse);
+
+        // Act
+        var result = await _controller.GetAll(paginationParams, null, null, null);
+
+        // Assert
+     var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<PagedResponse<BillListDto>>(okResult.Value);
+        Assert.Equal(2, response.Data.Count);
+    }
+
+    #endregion
+
+    #region GetById Tests
+
+    [Fact]
+    public async Task GetById_WithValidId_ReturnsOkResult()
+    {
+ // Arrange
+      SetupUserClaims(1, "Admin");
+   var billDto = new BillDto
+     {
+            Id = 1,
+            BillNumber = "BILL001",
+          TotalAmount = 150.00m,
+       ConsumerNumber = "CON001"
+     };
+
+        _mockBillService.Setup(s => s.GetByIdAsync(1))
+    .ReturnsAsync(ApiResponse<BillDto>.SuccessResponse(billDto));
+
+        // Act
+        var result = await _controller.GetById(1);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+      var response = Assert.IsType<ApiResponse<BillDto>>(okResult.Value);
+Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task GetById_WithInvalidId_ReturnsNotFound()
+    {
+        // Arrange
+        SetupUserClaims(1, "Admin");
+
+        _mockBillService.Setup(s => s.GetByIdAsync(999))
+    .ReturnsAsync(ApiResponse<BillDto>.ErrorResponse("Bill not found"));
+
+  // Act
+      var result = await _controller.GetById(999);
+
+        // Assert
+ Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    #endregion
+
+    #region GenerateBill Tests
+
+    [Fact]
+    public async Task GenerateBill_WithValidData_ReturnsCreatedResult()
+    {
+        // Arrange
+        SetupUserClaims(2, "BillingOfficer");
+  var generateBillDto = new GenerateBillDto
+      {
+      ConnectionId = 1,
+          BillingMonth = 1,
+          BillingYear = 2025
+        };
+
+        var billDto = new BillDto
+    {
+     Id = 1,
+            BillNumber = "BILL001",
+            TotalAmount = 75.60m
+        };
+
+        _mockBillService.Setup(s => s.GenerateBillAsync(generateBillDto, 2))
+            .ReturnsAsync(ApiResponse<BillDto>.SuccessResponse(billDto));
+
+        // Act
+  var result = await _controller.GenerateBill(generateBillDto);
+
+        // Assert
+     var createdResult = Assert.IsType<CreatedAtActionResult>(result);
+        var response = Assert.IsType<ApiResponse<BillDto>>(createdResult.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task GenerateBill_WithInvalidConnection_ReturnsBadRequest()
+    {
+        // Arrange
+        SetupUserClaims(2, "BillingOfficer");
+    var generateBillDto = new GenerateBillDto
+        {
+      ConnectionId = 999,
+      BillingMonth = 1,
+       BillingYear = 2025
+        };
+
+        _mockBillService.Setup(s => s.GenerateBillAsync(generateBillDto, 2))
+      .ReturnsAsync(ApiResponse<BillDto>.ErrorResponse("Connection not found"));
+
+  // Act
+        var result = await _controller.GenerateBill(generateBillDto);
+
+        // Assert
+     Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    #endregion
+
+    #region Consumer Authorization Tests
+
+    [Fact]
+    public async Task GetById_AsConsumer_WithOwnBill_ReturnsOkResult()
+    {
+        // Arrange
+        SetupUserClaims(5, "Consumer");
+        var consumerNumber = "CON001";
+
+        var billDto = new BillDto { Id = 1, ConsumerNumber = consumerNumber };
+    var consumerDto = new ConsumerDto { Id = 1, UserId = 5, ConsumerNumber = consumerNumber };
+
+      _mockBillService.Setup(s => s.GetByIdAsync(1))
+   .ReturnsAsync(ApiResponse<BillDto>.SuccessResponse(billDto));
+
+   _mockConsumerService.Setup(s => s.GetByUserIdAsync(5))
+  .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(consumerDto));
+
+        // Act
+  var result = await _controller.GetById(1);
+
+        // Assert
+ Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetById_AsConsumer_WithOthersBill_ReturnsForbid()
+ {
+        // Arrange
+        SetupUserClaims(5, "Consumer");
+
+    var billDto = new BillDto { Id = 1, ConsumerNumber = "CON002" };
+        var consumerDto = new ConsumerDto { Id = 1, UserId = 5, ConsumerNumber = "CON001" };
+
+        _mockBillService.Setup(s => s.GetByIdAsync(1))
+ .ReturnsAsync(ApiResponse<BillDto>.SuccessResponse(billDto));
+
+   _mockConsumerService.Setup(s => s.GetByUserIdAsync(5))
+            .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(consumerDto));
+
+        // Act
+        var result = await _controller.GetById(1);
+
+        // Assert
+        Assert.IsType<ForbidResult>(result);
+ }
+
+    #endregion
+}

@@ -1,0 +1,1835 @@
+﻿================================================================================
+    ANGULAR FRONTEND DEVELOPMENT PROMPT
+      UTILITY BILLING SYSTEM - CAPSTONE PROJECT
+      
+      Compatible with: UtilityManagmentApi (.NET 9 Backend)
+      Last Updated: December 2024
+================================================================================
+
+Create a complete Angular 18+ frontend application for a Utility Billing System 
+that integrates with the ASP.NET Core Web API backend. This prompt contains 
+ALL the information needed to build the frontend.
+
+================================================================================
+      PROJECT OVERVIEW
+================================================================================
+
+Build a secure, full-stack Angular application for utility billing management:
+- JWT-based authentication with role-based access control (4 roles)
+- Modern Angular 18+ with standalone components
+- Angular Material UI for professional design
+- Reactive Forms for all form handling
+- HTTPClient with Interceptors for API communication
+- Route Guards for protected routes
+- Responsive dashboard with charts and reports
+- Print-friendly bill/invoice layouts
+
+================================================================================
+     TECHNOLOGY STACK
+================================================================================
+
+Frontend Requirements:
+- Angular 18+ (standalone components, signals)
+- TypeScript 5.4+
+- Angular Material 18+
+- Reactive Forms
+- HTTPClient & Interceptors
+- RxJS 7+ for state management
+- Chart.js or ng2-charts for reports
+- Angular Router with lazy loading
+- SCSS for styling
+
+Install Commands:
+```bash
+ng new utility-billing-frontend --routing --style=scss --standalone
+cd utility-billing-frontend
+ng add @angular/material
+npm install chart.js ng2-charts
+npm install jwt-decode
+npm install @angular/cdk
+```
+
+================================================================================
+       BACKEND API DETAILS
+================================================================================
+
+Base URL: https://localhost:7027/api
+Authentication: JWT Bearer Token
+Content-Type: application/json
+
+Default Admin Credentials:
+- Email: admin@utilitybilling.com
+- Password: Admin@123
+
+================================================================================
+      USER ROLES & PERMISSIONS
+================================================================================
+
+1. Admin (Role = "Admin")
+   - Full system access
+   - User management (CRUD)
+   - Utility types & tariff plans management
+   - Billing cycles management
+   - All reports access
+   - All consumer/connection management
+
+2. BillingOfficer (Role = "BillingOfficer")
+   - Enter meter readings
+   - Generate bills (single & bulk)
+   - View consumers & connections
+   - View billing cycles
+   - Limited reports
+
+3. AccountOfficer (Role = "AccountOfficer")
+   - Record payments
+   - View bills (read-only)
+   - View consumers (read-only)
+   - Full reports access
+   - Payment summaries
+
+4. Consumer (Role = "Consumer")
+   - View own profile
+   - View own bills
+   - View own payment history
+   - View own consumption
+   - Receive notifications
+
+================================================================================
+         TYPESCRIPT INTERFACES/MODELS
+================================================================================
+
+// ==================== COMMON MODELS ====================
+
+export interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T | null;
+  errors: string[] | null;
+}
+
+export interface PagedResponse<T> {
+  success: boolean;
+  message: string;
+  data: T[];
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+  totalRecords: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+}
+
+export interface PaginationParams {
+  pageNumber: number;
+  pageSize: number;
+  searchTerm?: string;
+  sortBy?: string;
+  sortDescending?: boolean;
+}
+
+// ==================== AUTH MODELS ====================
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  refreshToken: string;
+  expiration: string;
+  user: User;
+}
+
+export interface RegisterRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  phone?: string;
+  role: 'Admin' | 'BillingOfficer' | 'AccountOfficer' | 'Consumer';
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface User {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  role: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface UpdateUserRequest {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  isActive?: boolean;
+}
+
+// ==================== CONSUMER MODELS ====================
+
+export interface Consumer {
+  id: number;
+  userId: number;
+  consumerNumber: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  registrationDate: string;
+  isActive: boolean;
+  connections: ConnectionSummary[];
+}
+
+export interface ConsumerListItem {
+  id: number;
+  consumerNumber: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  city: string;
+  isActive: boolean;
+  connectionCount: number;
+  totalOutstanding: number;
+}
+
+export interface CreateConsumerRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  phone?: string;
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+}
+
+export interface UpdateConsumerRequest {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  isActive?: boolean;
+}
+
+// ==================== CONNECTION MODELS ====================
+
+export interface Connection {
+  id: number;
+  consumerId: number;
+  consumerNumber: string;
+  consumerName: string;
+  utilityTypeId: number;
+  utilityTypeName: string;
+  tariffPlanId: number;
+  tariffPlanName: string;
+  meterNumber: string;
+  connectionNumber: string;
+  connectionDate: string;
+  status: 'Active' | 'Inactive' | 'Suspended' | 'Disconnected';
+  loadSanctioned?: number;
+  installationAddress?: string;
+  lastReading?: number;
+  lastReadingDate?: string;
+}
+
+export interface ConnectionSummary {
+  id: number;
+  connectionNumber: string;
+  meterNumber: string;
+  utilityType: string;
+  tariffPlan: string;
+  status: string;
+}
+
+export interface CreateConnectionRequest {
+  consumerId: number;
+  utilityTypeId: number;
+  tariffPlanId: number;
+  meterNumber: string;
+  connectionDate: string;
+  loadSanctioned?: number;
+  installationAddress?: string;
+}
+
+export interface UpdateConnectionRequest {
+  tariffPlanId?: number;
+  status?: string;
+  loadSanctioned?: number;
+  installationAddress?: string;
+}
+
+// ==================== UTILITY TYPE MODELS ====================
+
+export interface UtilityType {
+  id: number;
+  name: string;
+  description?: string;
+  unitOfMeasurement: string;
+  isActive: boolean;
+  tariffPlanCount: number;
+  connectionCount: number;
+}
+
+export interface CreateUtilityTypeRequest {
+  name: string;
+  description?: string;
+  unitOfMeasurement: string;
+}
+
+export interface UpdateUtilityTypeRequest {
+  name?: string;
+  description?: string;
+  unitOfMeasurement?: string;
+  isActive?: boolean;
+}
+
+// ==================== TARIFF PLAN MODELS ====================
+
+export interface TariffPlan {
+  id: number;
+  name: string;
+  description?: string;
+  utilityTypeId: number;
+  utilityTypeName: string;
+  ratePerUnit: number;
+  fixedCharges: number;
+  taxPercentage: number;
+  latePaymentPenalty: number;
+  slabMinUnits?: number;
+  slabMaxUnits?: number;
+  isActive: boolean;
+  effectiveFrom: string;
+  effectiveTo?: string;
+  connectionCount: number;
+}
+
+export interface CreateTariffPlanRequest {
+  name: string;
+  description?: string;
+  utilityTypeId: number;
+  ratePerUnit: number;
+  fixedCharges: number;
+  taxPercentage: number;
+  latePaymentPenalty: number;
+  slabMinUnits?: number;
+  slabMaxUnits?: number;
+  effectiveFrom: string;
+  effectiveTo?: string;
+}
+
+export interface UpdateTariffPlanRequest {
+  name?: string;
+  description?: string;
+  ratePerUnit?: number;
+  fixedCharges?: number;
+  taxPercentage?: number;
+  latePaymentPenalty?: number;
+  slabMinUnits?: number;
+  slabMaxUnits?: number;
+  isActive?: boolean;
+  effectiveTo?: string;
+}
+
+// ==================== METER READING MODELS ====================
+
+export interface MeterReading {
+  id: number;
+  connectionId: number;
+  connectionNumber: string;
+  meterNumber: string;
+  consumerName: string;
+  consumerNumber: string;
+  utilityType: string;
+  previousReading: number;
+  currentReading: number;
+  unitsConsumed: number;
+  readingDate: string;
+  billingMonth: number;
+  billingYear: number;
+  readByUserName?: string;
+  notes?: string;
+  isEstimated: boolean;
+  isBilled: boolean;
+}
+
+export interface CreateMeterReadingRequest {
+  connectionId: number;
+  currentReading: number;
+  readingDate?: string;
+  billingMonth: number;
+  billingYear: number;
+  notes?: string;
+  isEstimated?: boolean;
+}
+
+export interface BulkMeterReadingRequest {
+  readings: CreateMeterReadingRequest[];
+}
+
+export interface UpdateMeterReadingRequest {
+  currentReading?: number;
+  readingDate?: string;
+  notes?: string;
+  isEstimated?: boolean;
+}
+
+// ==================== BILL MODELS ====================
+
+export interface Bill {
+  id: number;
+  billNumber: string;
+  connectionId: number;
+  connectionNumber: string;
+  meterNumber: string;
+  consumerName: string;
+  consumerNumber: string;
+  utilityType: string;
+  tariffPlan: string;
+  billingMonth: number;
+  billingYear: number;
+  billingPeriod: string;
+  billDate: string;
+  dueDate: string;
+  previousReading: number;
+  currentReading: number;
+  unitsConsumed: number;
+  ratePerUnit: number;
+  energyCharges: number;
+  fixedCharges: number;
+  taxAmount: number;
+  penaltyAmount: number;
+  previousBalance: number;
+  totalAmount: number;
+  amountPaid: number;
+  outstandingBalance: number;
+status: 'Generated' | 'Due' | 'PartiallyPaid' | 'Paid' | 'Overdue' | 'Cancelled';
+  generatedByUserName?: string;
+  createdAt: string;
+  payments: PaymentSummary[];
+}
+
+export interface BillListItem {
+  id: number;
+  billNumber: string;
+  consumerName: string;
+  consumerNumber: string;
+  utilityType: string;
+  billingPeriod: string;
+  dueDate: string;
+  totalAmount: number;
+  outstandingBalance: number;
+  status: string;
+}
+
+export interface GenerateBillRequest {
+  connectionId: number;
+  billingMonth: number;
+  billingYear: number;
+  meterReadingId?: number;
+}
+
+export interface GenerateBulkBillsRequest {
+  billingMonth: number;
+  billingYear: number;
+  connectionIds?: number[];
+}
+
+export interface BillSummary {
+  totalBills: number;
+  totalBilledAmount: number;
+  totalCollected: number;
+  totalOutstanding: number;
+  paidBills: number;
+  overdueBills: number;
+}
+
+export interface UpdateBillStatusRequest {
+  status: string;
+}
+
+// ==================== PAYMENT MODELS ====================
+
+export interface Payment {
+  id: number;
+  paymentNumber: string;
+  billId: number;
+  billNumber: string;
+  consumerName: string;
+  consumerNumber: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: 'Cash' | 'CreditCard' | 'DebitCard' | 'BankTransfer' | 'OnlinePayment' | 'Cheque' | 'UPI';
+  transactionReference?: string;
+  status: 'Pending' | 'Completed' | 'Failed' | 'Refunded';
+  receivedByUserName?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface PaymentSummary {
+  id: number;
+  paymentNumber: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  status: string;
+}
+
+export interface CreatePaymentRequest {
+  billId: number;
+  amount: number;
+  paymentDate?: string;
+  paymentMethod: 'Cash' | 'CreditCard' | 'DebitCard' | 'BankTransfer' | 'OnlinePayment' | 'Cheque' | 'UPI';
+  transactionReference?: string;
+  notes?: string;
+}
+
+export interface PaymentSummaryReport {
+  totalPayments: number;
+  totalAmount: number;
+  byPaymentMethod: { [key: string]: number };
+}
+
+// ==================== BILLING CYCLE MODELS ====================
+
+export interface BillingCycle {
+  id: number;
+  name: string;
+  month: number;
+  year: number;
+  startDate: string;
+  endDate: string;
+  billGenerationDate?: string;
+  dueDate?: string;
+  status: 'Open' | 'ReadingInProgress' | 'BillingInProgress' | 'Closed';
+  createdByUserName?: string;
+}
+
+export interface CreateBillingCycleRequest {
+  month: number;
+  year: number;
+  startDate: string;
+  endDate: string;
+  billGenerationDate?: string;
+  dueDate?: string;
+}
+
+export interface UpdateBillingCycleRequest {
+  startDate?: string;
+  endDate?: string;
+  billGenerationDate?: string;
+  dueDate?: string;
+  status?: string;
+}
+
+// ==================== NOTIFICATION MODELS ====================
+
+export interface Notification {
+  id: number;
+  userId: number;
+  title: string;
+  message: string;
+  type: 'BillGenerated' | 'PaymentReceived' | 'DueDateReminder' | 'OverdueNotice' | 'ConnectionStatusChange' | 'General';
+  relatedEntityId?: number;
+  relatedEntityType?: string;
+  isRead: boolean;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface NotificationSummary {
+  totalCount: number;
+  unreadCount: number;
+}
+
+export interface CreateNotificationRequest {
+  userId: number;
+  title: string;
+  message: string;
+  type: string;
+  relatedEntityId?: number;
+  relatedEntityType?: string;
+}
+
+// ==================== REPORT MODELS ====================
+
+export interface DashboardSummary {
+  totalConsumers: number;
+  activeConnections: number;
+  pendingBills: number;
+  overdueBills: number;
+  totalRevenueThisMonth: number;
+  totalOutstanding: number;
+  recentActivities: RecentActivity[];
+  consumptionByUtilityType: UtilityConsumption[];
+}
+
+export interface RecentActivity {
+  type: string;
+  description: string;
+  timestamp: string;
+}
+
+export interface UtilityConsumption {
+  utilityType: string;
+  totalConsumption: number;
+  unit: string;
+  connectionCount: number;
+}
+
+export interface MonthlyRevenueReport {
+  month: number;
+  year: number;
+  monthName: string;
+  totalBilledAmount: number;
+  totalCollected: number;
+  totalOutstanding: number;
+  totalBills: number;
+  paidBills: number;
+  collectionRate: number;
+  byUtilityType: UtilityRevenue[];
+}
+
+export interface UtilityRevenue {
+  utilityType: string;
+  billedAmount: number;
+  collected: number;
+  billCount: number;
+}
+
+export interface OutstandingDuesReport {
+  totalOutstanding: number;
+  totalOverdueAccounts: number;
+  byAgeBucket: OutstandingByAge[];
+  topDefaulters: ConsumerOutstanding[];
+}
+
+export interface OutstandingByAge {
+  ageBucket: string;
+  amount: number;
+  count: number;
+}
+
+export interface ConsumerOutstanding {
+  consumerId: number;
+  consumerNumber: string;
+  consumerName: string;
+  outstandingAmount: number;
+  overdueBills: number;
+  oldestDueDate?: string;
+}
+
+export interface ConsumptionReport {
+  month: number;
+  year: number;
+  byUtilityType: UtilityConsumptionDetail[];
+  topConsumers: TopConsumer[];
+  totalConsumption: number;
+  averageConsumption: number;
+}
+
+export interface UtilityConsumptionDetail {
+  utilityType: string;
+unit: string;
+  totalConsumption: number;
+  averageConsumption: number;
+  minConsumption: number;
+  maxConsumption: number;
+  connectionCount: number;
+}
+
+export interface TopConsumer {
+  consumerId: number;
+  consumerNumber: string;
+  consumerName: string;
+  utilityType: string;
+  consumption: number;
+  unit: string;
+}
+
+export interface ConsumerBillingSummary {
+  consumerId: number;
+  consumerNumber: string;
+  consumerName: string;
+  totalBills: number;
+  totalBilledAmount: number;
+  totalPaid: number;
+  outstandingBalance: number;
+  connections: ConnectionBillingSummary[];
+}
+
+export interface ConnectionBillingSummary {
+  connectionId: number;
+  connectionNumber: string;
+  utilityType: string;
+  billCount: number;
+  totalBilled: number;
+  totalPaid: number;
+  outstanding: number;
+  totalConsumption: number;
+}
+
+export interface CollectionReport {
+  fromDate: string;
+  toDate: string;
+  totalCollected: number;
+  dailyCollections: DailyCollection[];
+  byPaymentMethod: PaymentMethodCollection[];
+}
+
+export interface DailyCollection {
+  date: string;
+  amount: number;
+  paymentCount: number;
+}
+
+export interface PaymentMethodCollection {
+  paymentMethod: string;
+  amount: number;
+  count: number;
+  percentage: number;
+}
+
+================================================================================
+     API ENDPOINTS REFERENCE
+================================================================================
+
+// ==================== AUTH ENDPOINTS ====================
+POST   /api/auth/login      - Login (Public)
+POST   /api/auth/register    - Register user (Admin only)
+POST   /api/auth/change-password          - Change password (Authenticated)
+GET    /api/auth/me          - Get current user (Authenticated)
+GET    /api/auth/users         - Get all users (Admin only)
+GET    /api/auth/users/{id}     - Get user by ID (Admin only)
+PUT    /api/auth/users/{id}    - Update user (Admin only)
+DELETE /api/auth/users/{id} - Delete user (Admin only)
+
+// ==================== CONSUMER ENDPOINTS ====================
+GET    /api/consumers            - Get all consumers (paginated)
+GET    /api/consumers/{id}                - Get consumer by ID
+GET    /api/consumers/number/{number}- Get consumer by number
+GET    /api/consumers/my-profile     - Get own profile (Consumer)
+GET    /api/consumers/search        - Search consumers
+POST   /api/consumers- Create consumer
+PUT    /api/consumers/{id}         - Update consumer
+DELETE /api/consumers/{id}        - Delete consumer
+
+// ==================== CONNECTION ENDPOINTS ====================
+GET    /api/connections         - Get all connections (paginated)
+GET    /api/connections/{id}      - Get connection by ID
+GET    /api/connections/number/{number} - Get connection by number
+GET    /api/connections/consumer/{id}     - Get connections for consumer
+GET    /api/connections/pending-readings  - Get connections pending reading
+POST   /api/connections                   - Create connection
+PUT    /api/connections/{id}   - Update connection
+DELETE /api/connections/{id}      - Delete connection
+
+// ==================== UTILITY TYPE ENDPOINTS ====================
+GET    /api/utilitytypes        - Get all utility types
+GET    /api/utilitytypes/{id}    - Get utility type by ID
+POST   /api/utilitytypes         - Create utility type (Admin)
+PUT    /api/utilitytypes/{id}             - Update utility type (Admin)
+DELETE /api/utilitytypes/{id}        - Delete utility type (Admin)
+
+// ==================== TARIFF PLAN ENDPOINTS ====================
+GET  /api/tariffplans  - Get all tariff plans
+GET    /api/tariffplans/paged      - Get tariff plans (paginated)
+GET    /api/tariffplans/{id} - Get tariff plan by ID
+GET    /api/tariffplans/utility-type/{id} - Get tariff plans for utility type
+POST   /api/tariffplans            - Create tariff plan (Admin)
+PUT    /api/tariffplans/{id}     - Update tariff plan (Admin)
+DELETE /api/tariffplans/{id}       - Delete tariff plan (Admin)
+
+// ==================== METER READING ENDPOINTS ====================
+GET    /api/meterreadings        - Get all readings (paginated)
+GET  /api/meterreadings/{id}            - Get reading by ID
+GET    /api/meterreadings/connection/{id} - Get readings for connection
+GET    /api/meterreadings/unbilled        - Get unbilled readings
+GET    /api/meterreadings/last-reading/{connectionId} - Get last reading
+POST   /api/meterreadings    - Create reading
+POST   /api/meterreadings/bulk          - Create bulk readings
+PUT    /api/meterreadings/{id}            - Update reading
+DELETE /api/meterreadings/{id}            - Delete reading
+
+// ==================== BILL ENDPOINTS ====================
+GET    /api/bills      - Get all bills (paginated)
+GET  /api/bills/{id}     - Get bill by ID
+GET    /api/bills/number/{number}         - Get bill by number
+GET    /api/bills/connection/{id}         - Get bills for connection
+GET    /api/bills/consumer/{id}  - Get bills for consumer
+GET    /api/bills/my-bills    - Get own bills (Consumer)
+GET    /api/bills/overdue  - Get overdue bills
+GET    /api/bills/summary      - Get bill summary
+POST   /api/bills/generate - Generate single bill
+POST   /api/bills/generate-bulk- Generate bulk bills
+PUT    /api/bills/{id}/status  - Update bill status
+POST   /api/bills/update-overdue          - Update overdue bills
+DELETE /api/bills/{id}      - Cancel bill
+
+// ==================== PAYMENT ENDPOINTS ====================
+GET    /api/payments            - Get all payments (paginated)
+GET    /api/payments/{id}  - Get payment by ID
+GET    /api/payments/number/{number}      - Get payment by number
+GET    /api/payments/bill/{id}            - Get payments for bill
+GET    /api/payments/consumer/{id}  - Get payments for consumer
+GET    /api/payments/my-payments      - Get own payments (Consumer)
+GET  /api/payments/summary   - Get payment summary
+POST   /api/payments  - Record payment
+PUT    /api/payments/{id}/status    - Update payment status
+
+// ==================== BILLING CYCLE ENDPOINTS ====================
+GET    /api/billingcycles      - Get all billing cycles
+GET    /api/billingcycles/{id}            - Get billing cycle by ID
+GET    /api/billingcycles/current  - Get current billing cycle
+POST   /api/billingcycles         - Create billing cycle (Admin)
+PUT    /api/billingcycles/{id}    - Update billing cycle (Admin)
+DELETE /api/billingcycles/{id}     - Delete billing cycle (Admin)
+
+// ==================== NOTIFICATION ENDPOINTS ====================
+GET    /api/notifications    - Get user notifications
+GET    /api/notifications/{id}            - Get notification by ID
+GET    /api/notifications/summary    - Get notification summary
+POST   /api/notifications - Create notification (Admin)
+PUT /api/notifications/{id}/read       - Mark as read
+PUT    /api/notifications/read-all        - Mark all as read
+DELETE /api/notifications/{id}  - Delete notification
+
+// ==================== REPORT ENDPOINTS ====================
+GET    /api/reports/dashboard             - Get dashboard summary
+GET    /api/reports/revenue/monthly     - Get monthly revenue report
+GET    /api/reports/revenue/yearly        - Get yearly revenue report
+GET    /api/reports/outstanding-dues  - Get outstanding dues report
+GET    /api/reports/consumption - Get consumption report
+GET    /api/reports/consumer-billing/{id} - Get consumer billing summary
+GET    /api/reports/collection   - Get collection report
+
+================================================================================
+    ANGULAR PROJECT STRUCTURE
+================================================================================
+
+src/
+├── app/
+│   ├── core/       # Core module (singleton services)
+│   │   ├── guards/
+│   │ │   ├── auth.guard.ts    # Check if authenticated
+│   │   │   └── role.guard.ts       # Check user role
+│   │   ├── interceptors/
+│   │   │ ├── auth.interceptor.ts     # Add JWT token to requests
+│   │   │   └── error.interceptor.ts    # Global error handling
+│   │   ├── services/
+│   │   │   ├── auth.service.ts         # Authentication logic
+│   │   │   ├── storage.service.ts      # LocalStorage wrapper
+│   │   │   └── toast.service.ts  # Notification toasts
+│   │   └── models/
+│   │       ├── user.model.ts
+│   │       ├── api-response.model.ts
+│   │       └── index.ts        # Export all models
+│   │
+│   ├── shared/             # Shared module (reusable)
+│   │   ├── components/
+│   │   │   ├── navbar/        # Top navigation bar
+│   │ │   ├── sidebar/    # Side navigation menu
+│   │   │   ├── footer/ # Footer component
+│   │   │   ├── loading-spinner/        # Loading indicator
+│   │   │   ├── confirm-dialog/         # Confirmation modal
+│   │   │   ├── data-table/             # Reusable data table
+│   │   │   ├── page-header/            # Page title & breadcrumb
+│   │   │   └── stats-card/   # Dashboard stat card
+│   │   ├── pipes/
+│   │   │ ├── currency-format.pipe.ts
+│   │   │   ├── date-format.pipe.ts
+│   │   │   └── status-badge.pipe.ts
+│   │   └── directives/
+│   │       └── has-role.directive.ts   # *hasRole="['Admin']"
+│   │
+│   ├── features/      # Feature modules (lazy loaded)
+│   │   ├── auth/
+│   │   │   ├── login/
+│   │   │   │   ├── login.component.ts
+│   │   │   │   ├── login.component.html
+│   │   │   │   └── login.component.scss
+│   │   │   ├── change-password/
+│   │   │   └── auth.routes.ts
+│   │   │
+│   │   ├── dashboard/
+│   │   │   ├── dashboard.component.ts
+│   │   │   ├── dashboard.component.html
+│   │   │   ├── widgets/
+│   │   │   │   ├── stats-widget/
+│   │   │   │ ├── recent-activities/
+│   │   │   │   ├── consumption-chart/
+│   │   │   │   └── outstanding-chart/
+│   │ │   └── dashboard.routes.ts
+│   │   │
+│   │   ├── consumers/
+│   │   │   ├── consumer-list/
+│   │   │   ├── consumer-detail/
+│   │   │   ├── consumer-form/
+│   │   │   ├── consumer.service.ts
+│   │   │   └── consumers.routes.ts
+│   │   │
+│ │   ├── connections/
+│   │   │   ├── connection-list/
+│ │   │   ├── connection-detail/
+│   │   │   ├── connection-form/
+│   │ │   ├── connection.service.ts
+│   │   │   └── connections.routes.ts
+│   │   │
+│   │   ├── meter-readings/
+│   │   │   ├── reading-list/
+│   │   │   ├── reading-entry/
+│   │   │   ├── bulk-reading-entry/
+│   │   │   ├── meter-reading.service.ts
+│   │   │   └── meter-readings.routes.ts
+│   │   │
+│   │   ├── billing/
+│   │   │├── bill-list/
+│   │   │   ├── bill-detail/
+│   │   │   ├── bill-generate/
+│   │   │   ├── bulk-bill-generate/
+│   │   │   ├── bill-invoice/           # Printable invoice
+│ │   │   ├── bill.service.ts
+│   │   │ └── billing.routes.ts
+│   │   │
+│   │   ├── payments/
+│   │   │   ├── payment-list/
+│   │   │   ├── payment-detail/
+│   │   │   ├── payment-record/
+│   │   │   ├── payment-receipt/        # Printable receipt
+│   │   │   ├── payment.service.ts
+│   │   │   └── payments.routes.ts
+│   │   │
+│   │   ├── reports/
+│   │   │   ├── revenue-report/
+│   │   │├── outstanding-dues-report/
+│   │   │├── consumption-report/
+│   │   │├── collection-report/
+│   │   │   ├── consumer-billing-report/
+│   │   │   ├── report.service.ts
+│   │   │ └── reports.routes.ts
+│   │   │
+│   │   ├── admin/
+│   ││   ├── user-management/
+│   │   │   │   ├── user-list/
+│ │   │   │   ├── user-form/
+│   │   │   │   └── user.service.ts
+│   │   │   ├── utility-types/
+│   │   │   ├── tariff-plans/
+│   │   │   ├── billing-cycles/
+│   │   │   └── admin.routes.ts
+│   │   │
+│   │   └── consumer-portal/            # Consumer-only views
+│   │       ├── my-bills/
+│   │       ├── my-payments/
+│   │       ├── my-profile/
+│   │├── my-consumption/
+│   │       └── consumer-portal.routes.ts
+│   │
+│   ├── layouts/
+││   ├── main-layout/         # Staff layout with sidebar
+│   │   ├── consumer-layout/            # Consumer portal layout
+│   │   └── auth-layout/    # Login page layout
+│   │
+│├── app.component.ts
+│   ├── app.config.ts
+│   └── app.routes.ts
+│
+├── assets/
+│   ├── images/
+│   │   └── logo.png
+│   └── icons/
+│
+├── environments/
+│   ├── environment.ts
+│   └── environment.prod.ts
+│
+└── styles.scss
+
+================================================================================
+        CORE SERVICES IMPLEMENTATION
+================================================================================
+
+// ==================== environment.ts ====================
+export const environment = {
+  production: false,
+  apiUrl: 'https://localhost:7027/api',
+  tokenKey: 'utility_billing_token',
+  userKey: 'utility_billing_user'
+};
+
+// ==================== auth.service.ts ====================
+import { Injectable, inject, signal, computed } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
+import { Observable, tap, BehaviorSubject } from 'rxjs';
+import { jwtDecode } from 'jwt-decode';
+import { environment } from '../../../environments/environment';
+import { ApiResponse, LoginRequest, LoginResponse, User } from '../models';
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private http = inject(HttpClient);
+  private router = inject(Router);
+  
+  private currentUserSubject = new BehaviorSubject<User | null>(this.getStoredUser());
+  public currentUser$ = this.currentUserSubject.asObservable();
+  
+  get currentUser(): User | null {
+    return this.currentUserSubject.value;
+  }
+  
+  get isAuthenticated(): boolean {
+    return !!this.getToken() && !this.isTokenExpired();
+  }
+  
+  get userRole(): string | null {
+    return this.currentUser?.role || null;
+  }
+
+  login(request: LoginRequest): Observable<ApiResponse<LoginResponse>> {
+    return this.http.post<ApiResponse<LoginResponse>>(`${environment.apiUrl}/auth/login`, request)
+      .pipe(
+        tap(response => {
+       if (response.success && response.data) {
+         this.setToken(response.data.token);
+            this.setUser(response.data.user);
+ this.currentUserSubject.next(response.data.user);
+          }
+      })
+      );
+  }
+
+  logout(): void {
+    localStorage.removeItem(environment.tokenKey);
+    localStorage.removeItem(environment.userKey);
+    this.currentUserSubject.next(null);
+    this.router.navigate(['/login']);
+  }
+
+  getToken(): string | null {
+    return localStorage.getItem(environment.tokenKey);
+  }
+
+  private setToken(token: string): void {
+    localStorage.setItem(environment.tokenKey, token);
+  }
+
+  private setUser(user: User): void {
+    localStorage.setItem(environment.userKey, JSON.stringify(user));
+  }
+
+  private getStoredUser(): User | null {
+    const userJson = localStorage.getItem(environment.userKey);
+    return userJson ? JSON.parse(userJson) : null;
+  }
+
+  private isTokenExpired(): boolean {
+    const token = this.getToken();
+    if (!token) return true;
+    
+ try {
+      const decoded: any = jwtDecode(token);
+      return decoded.exp < Date.now() / 1000;
+    } catch {
+      return true;
+    }
+  }
+
+  hasRole(roles: string[]): boolean {
+    const userRole = this.userRole;
+    return userRole ? roles.includes(userRole) : false;
+  }
+
+  changePassword(currentPassword: string, newPassword: string): Observable<ApiResponse<boolean>> {
+    return this.http.post<ApiResponse<boolean>>(`${environment.apiUrl}/auth/change-password`, {
+      currentPassword,
+      newPassword
+    });
+  }
+
+  getCurrentUser(): Observable<ApiResponse<User>> {
+    return this.http.get<ApiResponse<User>>(`${environment.apiUrl}/auth/me`);
+  }
+}
+
+// ==================== auth.interceptor.ts ====================
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { catchError, throwError } from 'rxjs';
+import { AuthService } from '../services/auth.service';
+
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+  
+  const token = authService.getToken();
+  
+  if (token) {
+    req = req.clone({
+      setHeaders: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+  }
+  
+  return next(req).pipe(
+    catchError((error: HttpErrorResponse) => {
+      if (error.status === 401) {
+        authService.logout();
+        router.navigate(['/login']);
+      }
+      return throwError(() => error);
+    })
+  );
+};
+
+// ==================== auth.guard.ts ====================
+import { inject } from '@angular/core';
+import { Router, CanActivateFn } from '@angular/router';
+import { AuthService } from '../services/auth.service';
+
+export const authGuard: CanActivateFn = (route, state) => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+  
+  if (authService.isAuthenticated) {
+    return true;
+  }
+  
+  router.navigate(['/login'], { queryParams: { returnUrl: state.url } });
+  return false;
+};
+
+// ==================== role.guard.ts ====================
+import { inject } from '@angular/core';
+import { Router, CanActivateFn } from '@angular/router';
+import { AuthService } from '../services/auth.service';
+
+export const roleGuard: CanActivateFn = (route, state) => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+  
+  const requiredRoles = route.data['roles'] as string[];
+  
+  if (requiredRoles && authService.hasRole(requiredRoles)) {
+    return true;
+  }
+  
+  router.navigate(['/unauthorized']);
+  return false;
+};
+
+================================================================================
+      APP ROUTES CONFIGURATION
+================================================================================
+
+// app.routes.ts
+import { Routes } from '@angular/router';
+import { authGuard } from './core/guards/auth.guard';
+import { roleGuard } from './core/guards/role.guard';
+
+export const routes: Routes = [
+  { path: '', redirectTo: '/dashboard', pathMatch: 'full' },
+  
+  // Auth routes (public)
+  {
+    path: 'login',
+    loadComponent: () => import('./features/auth/login/login.component')
+      .then(m => m.LoginComponent)
+  },
+  
+  // Dashboard (all authenticated users)
+  {
+    path: 'dashboard',
+    loadComponent: () => import('./features/dashboard/dashboard.component')
+      .then(m => m.DashboardComponent),
+    canActivate: [authGuard]
+  },
+  
+  // Consumer Management (Admin, BillingOfficer, AccountOfficer)
+  {
+    path: 'consumers',
+    loadChildren: () => import('./features/consumers/consumers.routes')
+      .then(m => m.CONSUMER_ROUTES),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin', 'BillingOfficer', 'AccountOfficer'] }
+  },
+  
+  // Connection Management
+  {
+    path: 'connections',
+    loadChildren: () => import('./features/connections/connections.routes')
+      .then(m => m.CONNECTION_ROUTES),
+    canActivate: [authGuard, roleGuard],
+  data: { roles: ['Admin', 'BillingOfficer', 'AccountOfficer'] }
+  },
+  
+  // Meter Readings (Admin, BillingOfficer)
+  {
+    path: 'meter-readings',
+    loadChildren: () => import('./features/meter-readings/meter-readings.routes')
+      .then(m => m.METER_READING_ROUTES),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin', 'BillingOfficer'] }
+  },
+  
+  // Billing (Admin, BillingOfficer)
+  {
+    path: 'billing',
+    loadChildren: () => import('./features/billing/billing.routes')
+      .then(m => m.BILLING_ROUTES),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin', 'BillingOfficer', 'AccountOfficer'] }
+  },
+  
+  // Payments (Admin, AccountOfficer)
+  {
+    path: 'payments',
+    loadChildren: () => import('./features/payments/payments.routes')
+      .then(m => m.PAYMENT_ROUTES),
+    canActivate: [authGuard, roleGuard],
+  data: { roles: ['Admin', 'AccountOfficer'] }
+  },
+  
+  // Reports (Admin, AccountOfficer)
+  {
+    path: 'reports',
+    loadChildren: () => import('./features/reports/reports.routes')
+      .then(m => m.REPORT_ROUTES),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin', 'AccountOfficer', 'BillingOfficer'] }
+  },
+  
+  // Admin Panel (Admin only)
+  {
+    path: 'admin',
+    loadChildren: () => import('./features/admin/admin.routes')
+      .then(m => m.ADMIN_ROUTES),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Admin'] }
+  },
+  
+  // Consumer Portal (Consumer only)
+  {
+    path: 'my',
+    loadChildren: () => import('./features/consumer-portal/consumer-portal.routes')
+      .then(m => m.CONSUMER_PORTAL_ROUTES),
+    canActivate: [authGuard, roleGuard],
+    data: { roles: ['Consumer'] }
+  },
+  
+  // Catch-all
+  { path: '**', redirectTo: '/dashboard' }
+];
+
+================================================================================
+  REQUIRED PAGES/COMPONENTS
+================================================================================
+
+1. LOGIN PAGE (/login)
+   - Email and password fields with validation
+   - Remember me checkbox
+   - Error message display for invalid credentials
+   - Redirect to dashboard after successful login
+   - Role-based redirect (Consumer → /my/bills, Staff → /dashboard)
+
+2. DASHBOARD (/dashboard)
+   For Staff (Admin, BillingOfficer, AccountOfficer):
+   - Stats cards: Total Consumers, Active Connections, Pending Bills, Overdue Bills
+   - Revenue this month (currency formatted)
+   - Total outstanding amount
+   - Recent activities list (last 10)
+   - Consumption chart by utility type (pie/bar chart)
+   - Quick action buttons based on role
+   
+   For Consumer:
+   - My outstanding balance
+   - My recent bills
+   - My consumption trend
+   - Notifications
+
+3. CONSUMER MANAGEMENT (/consumers)
+   - Consumer list with search, filter by status, pagination
+   - Columns: Consumer#, Name, Email, City, Connections, Outstanding, Status, Actions
+   - Consumer detail view showing profile and all connections
+   - Add new consumer form
+   - Edit consumer form
+   - Delete with confirmation dialog
+
+4. CONNECTION MANAGEMENT (/connections)
+   - Connection list with filters (utility type, status)
+   - Columns: Connection#, Consumer, Utility Type, Meter#, Tariff, Status, Last Reading
+   - Connection detail view
+   - Add new connection (select consumer, utility type, tariff plan)
+   - Edit connection (change tariff, status)
+
+5. METER READING ENTRY (/meter-readings)
+   - Single reading entry form:
+     * Select connection (dropdown with search)
+     * Display previous reading (auto-filled)
+     * Enter current reading (validation: >= previous)
+     * Select billing month/year
+     * Add notes (optional)
+   - Bulk reading entry:
+     * Table format for multiple connections
+     * Show pending connections for current month
+     * Validation on each row
+   - Reading list with filters (month, year, connection)
+
+6. BILLS & INVOICES (/billing)
+ - Bill list with filters (status, month, year)
+   - Columns: Bill#, Consumer, Period, Due Date, Amount, Outstanding, Status
+   - Bill detail view (invoice format):
+     * Consumer details
+     * Connection details
+     * Reading details (previous, current, units)
+     * Charges breakdown (energy, fixed, tax, penalty)
+     * Payment history
+     * Print button
+   - Generate single bill form
+   - Bulk bill generation:
+     * Select month/year
+     * Optionally select specific connections
+     * Generate all unbilled readings
+   - Overdue bills list
+   - Bill summary statistics
+
+7. PAYMENT HISTORY (/payments)
+   - Payment list with filters (date range, method, status)
+   - Columns: Payment#, Bill#, Consumer, Amount, Date, Method, Status
+   - Record new payment:
+     * Select bill (show outstanding amount)
+     * Enter amount (max = outstanding)
+* Select payment method
+     * Add reference/notes
+ - Payment receipt view (printable)
+   - Payment summary by method (pie chart)
+
+8. REPORTS (/reports)
+   - Revenue Report:
+     * Monthly/Yearly toggle
+     * Bar chart: Billed vs Collected
+     * Breakdown by utility type
+     * Collection rate percentage
+ - Outstanding Dues Report:
+     * Total outstanding
+     * Age bucket breakdown (0-30, 31-60, 61-90, 90+ days)
+     * Top defaulters table
+ - Consumption Report:
+     * Monthly consumption by utility type
+     * Top consumers
+     * Average consumption trends
+   - Collection Report:
+     * Date range picker
+     * Daily collection chart
+     * By payment method breakdown
+   - Consumer Billing Summary:
+* Select consumer
+     * All-time billing history
+ * Connection-wise breakdown
+
+9. ADMIN PANEL (/admin)
+   - User Management:
+     * User list (Name, Email, Role, Status)
+     * Create user (with role selection)
+     * Edit user
+   * Activate/Deactivate
+   - Utility Types:
+     * List (Name, Unit, Tariff Plans, Connections)
+     * Add/Edit/Delete
+   - Tariff Plans:
+ * List (Name, Utility, Rate, Fixed, Tax, Penalty)
+     * Add/Edit/Deactivate
+   - Billing Cycles:
+     * List (Month, Year, Start, End, Status)
+     * Create new cycle
+     * Update status
+
+10. CONSUMER PORTAL (/my/...)
+    - My Profile (/my/profile):
+      * View personal details
+      * View connections
+      * Edit contact info
+    - My Bills (/my/bills):
+      * List of all bills
+      * Filter by status
+      * View/Download invoice
+    - My Payments (/my/payments):
+ * Payment history
+      * View receipts
+    - My Consumption (/my/consumption):
+      * Consumption chart over time
+      * Connection-wise breakdown
+
+================================================================================
+   UI/UX REQUIREMENTS
+================================================================================
+
+1. Use Angular Material components throughout:
+   - MatToolbar, MatSidenav for layout
+   - MatTable with MatPaginator, MatSort
+   - MatCard for content sections
+   - MatDialog for modals
+   - MatSnackBar for notifications
+   - MatDatepicker for dates
+   - MatSelect, MatAutocomplete for dropdowns
+   - MatProgressSpinner for loading
+
+2. Responsive design:
+   - Desktop: Full sidebar visible
+   - Tablet: Collapsible sidebar
+   - Mobile: Bottom navigation or hamburger menu
+
+3. Color scheme:
+   - Primary: Blue (#1976d2)
+   - Accent: Orange (#ff9800)
+   - Warn: Red (#f44336)
+   - Success: Green (#4caf50)
+
+4. Status badges with colors:
+   - Generated: Blue
+   - Due: Orange
+   - Paid: Green
+   - Overdue: Red
+   - PartiallyPaid: Yellow
+   - Cancelled: Gray
+
+5. Loading states:
+   - Show spinner during API calls
+   - Disable buttons during form submission
+   - Skeleton loaders for initial page load
+
+6. Toast notifications:
+   - Success: Green snackbar (3s auto-dismiss)
+   - Error: Red snackbar (5s with close button)
+   - Info: Blue snackbar (3s)
+
+7. Confirmation dialogs:
+   - Delete operations
+   - Bill generation
+   - Status changes
+
+8. Form validation:
+   - Real-time validation
+   - Error messages under fields
+   - Required field indicators (*)
+   - Disable submit until valid
+
+9. Charts (using ng2-charts/Chart.js):
+   - Dashboard: Pie chart for consumption
+   - Revenue: Bar chart (billed vs collected)
+   - Collection: Line chart (daily trend)
+
+10. Print-friendly layouts:
+    - Bill invoice: Clean, no navigation
+    - Payment receipt: Compact format
+    - Use @media print in CSS
+
+================================================================================
+          SAMPLE LOGIN COMPONENT
+================================================================================
+
+// login.component.ts
+import { Component, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { Router, ActivatedRoute } from '@angular/router';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { AuthService } from '../../../core/services/auth.service';
+
+@Component({
+  selector: 'app-login',
+  standalone: true,
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+  MatButtonModule,
+    MatCheckboxModule,
+    MatProgressSpinnerModule
+  ],
+  template: `
+    <div class="login-container">
+      <mat-card class="login-card">
+  <mat-card-header>
+   <mat-card-title>Utility Billing System</mat-card-title>
+ <mat-card-subtitle>Sign in to your account</mat-card-subtitle>
+        </mat-card-header>
+    
+        <mat-card-content>
+   <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+        <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Email</mat-label>
+            <input matInput type="email" formControlName="email" placeholder="Enter your email">
+  <mat-error *ngIf="loginForm.get('email')?.hasError('required')">Email is required</mat-error>
+ <mat-error *ngIf="loginForm.get('email')?.hasError('email')">Invalid email format</mat-error>
+            </mat-form-field>
+            
+   <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Password</mat-label>
+     <input matInput type="password" formControlName="password" placeholder="Enter your password">
+         <mat-error *ngIf="loginForm.get('password')?.hasError('required')">Password is required</mat-error>
+         </mat-form-field>
+          
+        <mat-checkbox formControlName="rememberMe">Remember me</mat-checkbox>
+   
+            <div class="error-message" *ngIf="errorMessage">
+         {{ errorMessage }}
+  </div>
+            
+            <button mat-raised-button color="primary" type="submit" 
+  class="full-width login-btn" [disabled]="loading || loginForm.invalid">
+         <mat-spinner diameter="20" *ngIf="loading"></mat-spinner>
+       <span *ngIf="!loading">Sign In</span>
+       </button>
+          </form>
+        </mat-card-content>
+      </mat-card>
+    </div>
+  `,
+  styles: [`
+    .login-container {
+      display: flex;
+   justify-content: center;
+ align-items: center;
+    min-height: 100vh;
+      background: linear-gradient(135deg, #1976d2, #42a5f5);
+    }
+    .login-card {
+      width: 100%;
+      max-width: 400px;
+      padding: 20px;
+    }
+    .full-width {
+width: 100%;
+      margin-bottom: 16px;
+    }
+    .login-btn {
+      height: 48px;
+  font-size: 16px;
+    }
+    .error-message {
+      color: #f44336;
+      margin-bottom: 16px;
+  text-align: center;
+    }
+  `]
+})
+export class LoginComponent {
+  private fb = inject(FormBuilder);
+  private authService = inject(AuthService);
+  private router = inject(Router);
+  private route = inject(ActivatedRoute);
+  private snackBar = inject(MatSnackBar);
+
+  loginForm: FormGroup = this.fb.group({
+    email: ['', [Validators.required, Validators.email]],
+    password: ['', Validators.required],
+    rememberMe: [false]
+  });
+
+  loading = false;
+  errorMessage = '';
+
+  onSubmit(): void {
+    if (this.loginForm.invalid) return;
+
+    this.loading = true;
+    this.errorMessage = '';
+
+this.authService.login(this.loginForm.value).subscribe({
+      next: (response) => {
+        if (response.success) {
+        const returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/dashboard';
+  
+  // Role-based redirect
+      const role = response.data?.user.role;
+    if (role === 'Consumer') {
+        this.router.navigate(['/my/bills']);
+        } else {
+       this.router.navigate([returnUrl]);
+        }
+      
+          this.snackBar.open('Login successful!', 'Close', { duration: 3000 });
+        } else {
+      this.errorMessage = response.message || 'Login failed';
+        }
+        this.loading = false;
+      },
+      error: (error) => {
+        this.errorMessage = error.error?.message || 'An error occurred';
+   this.loading = false;
+      }
+    });
+  }
+}
+
+================================================================================
+           APP CONFIGURATION
+================================================================================
+
+// app.config.ts
+import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { routes } from './app.routes';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+provideZoneChangeDetection({ eventCoalescing: true }),
+    provideRouter(routes),
+  provideHttpClient(withInterceptors([authInterceptor])),
+    provideAnimationsAsync()
+  ]
+};
+
+================================================================================
+                    ROLE-BASED ACCESS MATRIX
+================================================================================
+
+| Feature              | Admin | BillingOfficer | AccountOfficer | Consumer |
+|----------------------|-------|----------------|----------------|----------|
+| Dashboard      |   ✓   |       ✓        |     ✓    |    ✓*    |
+| User Management      |   ✓   |      |                |      |
+| Utility Types        |   ✓   |     View       | View   |          |
+| Tariff Plans      |   ✓   |     View       |    View      |          |
+| Consumer Management  |   ✓   |       ✓      |       ✓        | |
+| Connection Management|   ✓   |    ✓        | View      |       |
+| Meter Readings       |   ✓   |   ✓        |             ||
+| Bill Generation |   ✓   |       ✓ |     |    |
+| View Bills           | ✓   |       ✓        |       ✓        |   Own    |
+| Record Payments      |   ✓   |    |       ✓        |          |
+| View Payments        |   ✓   |                |       ✓        |   Own    |
+| Reports     |   ✓ |     Some       |       ✓        |        |
+| Billing Cycles       |   ✓   |       ✓|     |          |
+| My Profile|   ✓   |       ✓        |       ✓        |    ✓     |
+| Notifications        |   ✓   | ✓        |       ✓|    ✓     |
+
+* Consumer sees simplified dashboard with their own data
+
+================================================================================
+         IMPORTANT NOTES
+================================================================================
+
+1. All API responses follow this structure:
+   {
+     "success": boolean,
+     "message": "string",
+     "data": T | null,
+     "errors": ["string"] | null
+   }
+
+2. Paginated responses include pagination metadata:
+   {
+   "success": true,
+     "data": [...],
+     "pageNumber": 1,
+     "pageSize": 10,
+     "totalPages": 5,
+     "totalRecords": 50,
+     "hasPrevious": false,
+     "hasNext": true
+   }
+
+3. Date format: ISO 8601 (2024-01-15T00:00:00Z)
+
+4. Currency: Display with 2 decimal places
+
+5. Bill Status values: Generated, Due, PartiallyPaid, Paid, Overdue, Cancelled
+
+6. Connection Status values: Active, Inactive, Suspended, Disconnected
+
+7. Payment Methods: Cash, CreditCard, DebitCard, BankTransfer, OnlinePayment, Cheque, UPI
+
+8. Billing Cycle Status: Open, ReadingInProgress, BillingInProgress, Closed
+
+9. Notification Types: BillGenerated, PaymentReceived, DueDateReminder, OverdueNotice, ConnectionStatusChange, General
+
+10. API will return 401 Unauthorized if token is invalid/expired - redirect to login
+
+11. API will return 403 Forbidden if user doesn't have required role - show error
+
+12. CORS is configured to allow requests from http://localhost:4200
+
+================================================================================
+     SEED DATA - TEST USERS & CONSUMERS
+================================================================================
+
+The backend is pre-seeded with the following test data that you should use
+for testing the Angular frontend during development:
+
+**Test Login Credentials:**
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@utilitybilling.com | Admin@123 |
+| Billing Officer | billing@utilitybilling.com | Billing@123 |
+| Account Officer | account@utilitybilling.com | Account@123 |
+| Consumer 1 | michael.brown@email.com | Consumer@123 |
+| Consumer 2 | emily.davis@email.com | Consumer@123 |
+| Consumer 3 | david.wilson@email.com | Consumer@123 |
+| Consumer 4 | jessica.martinez@email.com | Consumer@123 |
+| Consumer 5 | robert.anderson@email.com | Consumer@123 |
+
+**Consumers in System (5 total):**
+
+1. **Michael Brown** (CON240001)
+   - City: Springfield, Illinois
+   - Connections: 2
+     - ELE240001 (Electricity) - Active
+     - WAT240001 (Water) - Active
+
+2. **Emily Davis** (CON240002)
+ - City: Chicago, Illinois
+   - Connections: 2
+     - ELE240002 (Electricity) - Active
+- GAS240001 (Gas) - Active
+
+3. **David Wilson** (CON240003)
+   - City: Aurora, Illinois
+   - Connections: 1
+   - ELE240003 (Electricity, Commercial) - Active
+
+4. **Jessica Martinez** (CON240004)
+   - City: Naperville, Illinois
+   - Connections: 2
+- ELE240004 (Electricity) - Active
+     - INT240001 (Internet) - Active
+
+5. **Robert Anderson** (CON240005)
+   - City: Rockford, Illinois
+   - Connections: 2
+     - ELE240005 (Electricity) - Suspended
+   - WAT240002 (Water) - Active
+
+**Utility Types (4 total):**
+- Electricity (kWh)
+- Water (Gallons)
+- Gas (Cubic Feet)
+- Internet (GB)
+
+**Tariff Plans (5 total):**
+1. Residential Electricity - Standard (Rate: 0.12/unit, Fixed: 10.00)
+2. Commercial Electricity - Standard (Rate: 0.15/unit, Fixed: 25.00)
+3. Residential Water - Standard (Rate: 0.005/unit, Fixed: 5.00)
+4. Residential Gas - Standard (Rate: 0.02/unit, Fixed: 8.00)
+5. Internet - Basic Plan (Rate: 0.50/unit, Fixed: 29.99)
+
+**Billing Cycle (1 active):**
+- December 2024 (Status: Open)
+- Bill Generation Date: January 5, 2025
+- Due Date: January 20, 2025
+
+================================================================================
+         TESTING RECOMMENDATIONS
+================================================================================
+
+1. **Admin Testing:**
+   - Login as admin@utilitybilling.com / Admin@123
+   - Create/edit users
+   - Manage utility types and tariff plans
+   - Access all reports and statistics
+   - View all consumers and connections
+
+2. **Billing Officer Testing:**
+   - Login as billing@utilitybilling.com / Billing@123
+   - Enter meter readings for existing connections
+   - Generate bills (single and bulk)
+   - View consumers and connections
+   - View billing cycles
+
+3. **Account Officer Testing:**
+   - Login as account@utilitybilling.com / Account@123
+   - Record payments for generated bills
+   - View all reports (revenue, outstanding dues, consumption, collection)
+   - View payment summaries
+
+4. **Consumer Testing:**
+   - Login as michael.brown@email.com / Consumer@123 (or other consumer emails)
+   - View personal profile
+   - View bills for all connections
+   - View payment history
+   - View consumption trends
+
+5. **Sample Workflows:**
+   a) Generate Bills:
+  - Login as Billing Officer
+      - Navigate to Meter Readings
+      - Create reading for CON240001 - ELE240001 (e.g., current: 2000)
+      - Go to Billing > Generate Bill
+      - Select December 2024 billing cycle
+      
+   b) Record Payments:
+      - Login as Account Officer
+      - Navigate to Payments
+      - Click "Record Payment"
+      - Select a generated bill
+      - Enter amount and payment method
+      - Submit
+
+   c) View Reports:
+      - Login as Account Officer or Admin
+      - Go to Reports
+      - View Dashboard Summary, Revenue, Outstanding Dues
+      - Filter by different periods
+
+================================================================================
+     IMPORTANT NOTES FOR ANGULAR DEVELOPMENT
+================================================================================
+
+1. The backend seed data is set with UTC timestamps, so ensure your Angular
+app handles date/time conversions properly for local timezone display.
+
+2. Consumer email addresses are not actual accounts - they're pre-set for
+   testing. In production, you'd need proper email validation and password
+ recovery flows.
+
+3. The database uses SQL Server with proper relationships. Ensure your
+   Angular services handle cascading deletes appropriately (e.g., deleting
+   a consumer might be restricted if they have connections).
+
+4. Test both success and error scenarios:
+   - Valid login credentials
+   - Invalid email/password
+   - Expired tokens
+   - Role-based access denials
+   - Network errors and timeouts
+
+5. Sample test data for API calls:
+   - Meter Reading: Current = 2000 (for CON240001-ELE240001)
+   - Payment: Amount = 50-100 (less than average bill amounts)
+   - Bill Generation: Month 12, Year 2024
+
+================================================================================
+      END OF SEED DATA SECTION
+================================================================================
+
+

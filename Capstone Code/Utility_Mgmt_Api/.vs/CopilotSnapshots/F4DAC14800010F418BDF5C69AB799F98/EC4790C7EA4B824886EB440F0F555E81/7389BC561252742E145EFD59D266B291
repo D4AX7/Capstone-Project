@@ -1,0 +1,45 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace UtilityManagmentApi.DTOs.BillingCycle;
+
+public class BillingCycleDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int Month { get; set; }
+  public int Year { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public DateOnly? BillGenerationDate { get; set; }
+    public DateOnly? DueDate { get; set; }
+    public string Status { get; set; } = string.Empty;
+public DateTime CreatedAt { get; set; }
+    public string? CreatedByUserName { get; set; }
+  public int TotalReadings { get; set; }
+    public int TotalBills { get; set; }
+}
+
+public class CreateBillingCycleDto
+{
+  [Required]
+    [Range(1, 12)]
+  public int Month { get; set; }
+
+    [Required]
+[Range(2000, 2100)]
+    public int Year { get; set; }
+
+    public DateOnly? StartDate { get; set; }
+    public DateOnly? EndDate { get; set; }
+  public DateOnly? BillGenerationDate { get; set; }
+    public DateOnly? DueDate { get; set; }
+}
+
+public class UpdateBillingCycleDto
+{
+    public string? Status { get; set; }
+    public DateOnly? StartDate { get; set; }
+    public DateOnly? EndDate { get; set; }
+    public DateOnly? BillGenerationDate { get; set; }
+  public DateOnly? DueDate { get; set; }
+}

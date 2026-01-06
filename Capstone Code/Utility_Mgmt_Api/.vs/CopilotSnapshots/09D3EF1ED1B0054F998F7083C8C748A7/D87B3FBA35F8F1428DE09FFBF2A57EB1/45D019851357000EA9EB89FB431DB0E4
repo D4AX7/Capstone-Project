@@ -1,0 +1,71 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using System.Security.Claims;
+using UtilityManagmentApi.Controllers;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.MeterReading;
+using UtilityManagmentApi.Services.Interfaces;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Controllers;
+
+/// <summary>
+/// Unit tests for MeterReadingsController
+/// </summary>
+public class MeterReadingsControllerTests
+{
+    private readonly Mock<IMeterReadingService> _mockMeterReadingService;
+    private readonly MeterReadingsController _controller;
+
+    public MeterReadingsControllerTests()
+    {
+        _mockMeterReadingService = new Mock<IMeterReadingService>();
+        _controller = new MeterReadingsController(_mockMeterReadingService.Object);
+    }
+
+    private void SetupUserClaims(int userId, string role)
+    {
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Role, role)
+        };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+    }
+
+    [Fact]
+    public async Task GetAll_ReturnsOkResult()
+    {
+        // Arrange
+        var paginationParams = new PaginationParams { PageNumber = 1, PageSize = 10 };
+        var pagedResponse = new PagedResponse<MeterReadingListDto> { Data = new List<MeterReadingListDto>() };
+        _mockMeterReadingService.Setup(s => s.GetAllAsync(paginationParams, null, null)).ReturnsAsync(pagedResponse);
+
+        // Act
+        var result = await _controller.GetAll(paginationParams, null, null);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Create_WithValidData_ReturnsCreatedResult()
+    {
+        // Arrange
+        SetupUserClaims(2, "BillingOfficer");
+        var createDto = new CreateMeterReadingDto { ConnectionId = 1, CurrentReading = 2000, BillingMonth = 1, BillingYear = 2025 };
+        var readingDto = new MeterReadingDto { Id = 1, UnitsConsumed = 500 };
+        _mockMeterReadingService.Setup(s => s.CreateAsync(createDto, 2)).ReturnsAsync(ApiResponse<MeterReadingDto>.SuccessResponse(readingDto));
+
+        // Act
+        var result = await _controller.Create(createDto);
+
+        // Assert
+        Assert.IsType<CreatedAtActionResult>(result);
+    }
+}

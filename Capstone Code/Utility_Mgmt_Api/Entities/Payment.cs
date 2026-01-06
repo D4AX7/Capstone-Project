@@ -1,0 +1,63 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace UtilityManagmentApi.Entities;
+
+public class Payment
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string PaymentNumber { get; set; } = string.Empty;
+
+    [Required]
+    public int BillId { get; set; }
+
+    [Required]
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal Amount { get; set; }
+
+    [Required]
+    public DateTime PaymentDate { get; set; }
+
+    [Required]
+    public PaymentMethod PaymentMethod { get; set; }
+
+    [MaxLength(100)]
+    public string? TransactionReference { get; set; }
+
+    [Required]
+    public PaymentStatus Status { get; set; } = PaymentStatus.Completed;
+
+    public int? ReceivedByUserId { get; set; }
+
+    [MaxLength(500)]
+    public string? Notes { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Navigation properties
+    [ForeignKey("BillId")]
+    public Bill Bill { get; set; } = null!;
+
+    [ForeignKey("ReceivedByUserId")]
+    public ApplicationUser? ReceivedByUser { get; set; }
+}
+
+public enum PaymentMethod
+{
+    Cash = 1,
+    CreditCard = 2,
+    DebitCard = 3,
+    UPI = 4
+}
+
+public enum PaymentStatus
+{
+    Pending = 1,
+    Completed = 2,
+    Failed = 3,
+    Refunded = 4
+}

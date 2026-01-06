@@ -1,0 +1,760 @@
+﻿================================================================================
+      ANGULAR FRONTEND DEVELOPMENT PROMPT
+           UTILITY BILLING SYSTEM - CAPSTONE PROJECT
+================================================================================
+
+Create a complete Angular frontend application for a Utility Billing System that integrates with the following ASP.NET Core Web API backend.
+
+================================================================================
+    PROJECT OVERVIEW
+================================================================================
+
+Build a secure, full-stack Angular application for utility billing management that includes:
+- JWT-based authentication with role-based access control
+- Modern Angular 17+ with standalone components
+- Angular Material UI for professional design
+- Reactive Forms for all form handling
+- HTTPClient with Interceptors for API communication
+- Route Guards for protected routes
+- Responsive dashboard and reporting
+
+================================================================================
+        TECHNOLOGY STACK
+================================================================================
+
+Frontend Requirements:
+- Angular 17+ (latest version)
+- TypeScript
+- Angular Material
+- Reactive Forms
+- HTTPClient & Interceptors
+- RxJS for state management
+- Chart.js or ng2-charts for reports
+- Angular Router with lazy loading
+
+================================================================================
+      USER ROLES
+================================================================================
+
+1. Admin - Full system access
+2. BillingOfficer - Meter readings and bill generation
+3. AccountOfficer - Payment tracking and reports
+4. Consumer - View bills and payment history
+
+================================================================================
+                 API BASE URL & ENDPOINTS
+================================================================================
+
+Base URL: https://localhost:7027/api
+
+----- AUTHENTICATION ENDPOINTS -----
+
+POST /api/auth/login
+Request Body:
+{
+  "email": "string",
+  "password": "string"
+}
+Response:
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "token": "jwt_token_here",
+    "refreshToken": "refresh_token",
+    "expiration": "2024-01-01T00:00:00Z",
+    "user": {
+      "id": 1,
+      "firstName": "string",
+   "lastName": "string",
+ "email": "string",
+      "phone": "string",
+      "role": "Admin|BillingOfficer|AccountOfficer|Consumer",
+      "isActive": true,
+      "createdAt": "2024-01-01T00:00:00Z"
+    }
+  }
+}
+
+POST /api/auth/register (Admin only)
+Request Body:
+{
+  "firstName": "string",
+  "lastName": "string",
+  "email": "string",
+  "password": "string",
+  "phone": "string",
+  "role": "Admin|BillingOfficer|AccountOfficer|Consumer"
+}
+
+POST /api/auth/change-password
+Request Body:
+{
+  "currentPassword": "string",
+  "newPassword": "string"
+}
+
+GET /api/auth/me - Get current user
+GET /api/auth/users - Get all users (Admin only)
+GET /api/auth/users/{id} - Get user by ID (Admin only)
+PUT /api/auth/users/{id} - Update user (Admin only)
+DELETE /api/auth/users/{id} - Delete user (Admin only)
+
+----- CONSUMER ENDPOINTS -----
+
+GET /api/consumers?pageNumber=1&pageSize=10&searchTerm=&sortBy=&sortDescending=false&isActive=true
+Response: PagedResponse<ConsumerListDto>
+
+GET /api/consumers/{id}
+Response:
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "userId": 1,
+    "consumerNumber": "CON240001",
+"firstName": "string",
+    "lastName": "string",
+    "email": "string",
+    "phone": "string",
+    "address": "string",
+    "city": "string",
+    "state": "string",
+    "postalCode": "string",
+ "registrationDate": "2024-01-01",
+    "isActive": true,
+    "connections": [
+      {
+        "id": 1,
+        "connectionNumber": "ELE240001",
+        "meterNumber": "M123456",
+    "utilityType": "Electricity",
+      "tariffPlan": "Residential Standard",
+        "status": "Active"
+      }
+  ]
+  }
+}
+
+GET /api/consumers/number/{consumerNumber}
+GET /api/consumers/my-profile (Consumer role)
+GET /api/consumers/search?searchTerm=
+
+POST /api/consumers
+Request Body:
+{
+  "firstName": "string",
+  "lastName": "string",
+  "email": "string",
+  "password": "string",
+  "phone": "string",
+  "address": "string",
+  "city": "string",
+  "state": "string",
+  "postalCode": "string"
+}
+
+PUT /api/consumers/{id}
+DELETE /api/consumers/{id}
+
+----- CONNECTION ENDPOINTS -----
+
+GET /api/connections?pageNumber=1&pageSize=10&utilityTypeId=&status=
+GET /api/connections/{id}
+GET /api/connections/number/{connectionNumber}
+GET /api/connections/consumer/{consumerId}
+GET /api/connections/pending-readings?billingMonth=1&billingYear=2024
+
+POST /api/connections
+Request Body:
+{
+  "consumerId": 1,
+  "utilityTypeId": 1,
+  "tariffPlanId": 1,
+  "meterNumber": "string",
+  "connectionDate": "2024-01-01",
+  "loadSanctioned": 5.0,
+  "installationAddress": "string"
+}
+
+PUT /api/connections/{id}
+DELETE /api/connections/{id}
+
+----- UTILITY TYPE ENDPOINTS -----
+
+GET /api/utilitytypes?isActive=true
+Response:
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "Electricity",
+      "description": "Electric power supply",
+      "unitOfMeasurement": "kWh",
+      "isActive": true,
+      "tariffPlanCount": 2,
+    "connectionCount": 100
+    }
+  ]
+}
+
+GET /api/utilitytypes/{id}
+POST /api/utilitytypes
+PUT /api/utilitytypes/{id}
+DELETE /api/utilitytypes/{id}
+
+----- TARIFF PLAN ENDPOINTS -----
+
+GET /api/tariffplans?isActive=true&utilityTypeId=
+GET /api/tariffplans/paged?pageNumber=1&pageSize=10
+GET /api/tariffplans/{id}
+GET /api/tariffplans/utility-type/{utilityTypeId}
+
+POST /api/tariffplans
+Request Body:
+{
+  "name": "string",
+  "description": "string",
+  "utilityTypeId": 1,
+  "ratePerUnit": 0.12,
+  "fixedCharges": 10.00,
+  "taxPercentage": 8.00,
+  "latePaymentPenalty": 25.00,
+  "slabMinUnits": null,
+  "slabMaxUnits": null,
+  "effectiveFrom": "2024-01-01",
+  "effectiveTo": null
+}
+
+PUT /api/tariffplans/{id}
+DELETE /api/tariffplans/{id}
+
+----- METER READING ENDPOINTS -----
+
+GET /api/meterreadings?pageNumber=1&pageSize=10&billingMonth=&billingYear=
+GET /api/meterreadings/{id}
+GET /api/meterreadings/connection/{connectionId}
+GET /api/meterreadings/unbilled?billingMonth=1&billingYear=2024
+GET /api/meterreadings/last-reading/{connectionId}
+
+POST /api/meterreadings
+Request Body:
+{
+  "connectionId": 1,
+  "currentReading": 1500.00,
+  "readingDate": "2024-01-15",
+  "billingMonth": 1,
+  "billingYear": 2024,
+  "notes": "string",
+  "isEstimated": false
+}
+
+POST /api/meterreadings/bulk
+Request Body:
+{
+  "readings": [
+    {
+      "connectionId": 1,
+      "currentReading": 1500.00,
+      "billingMonth": 1,
+      "billingYear": 2024
+    }
+  ]
+}
+
+PUT /api/meterreadings/{id}
+DELETE /api/meterreadings/{id}
+
+----- BILL ENDPOINTS -----
+
+GET /api/bills?pageNumber=1&pageSize=10&status=&billingMonth=&billingYear=
+Response:
+{
+  "success": true,
+  "data": [...],
+  "pageNumber": 1,
+  "pageSize": 10,
+  "totalPages": 5,
+  "totalRecords": 50,
+  "hasPrevious": false,
+  "hasNext": true
+}
+
+GET /api/bills/{id}
+Response:
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "billNumber": "BILL2401000001",
+    "connectionId": 1,
+    "connectionNumber": "ELE240001",
+    "meterNumber": "M123456",
+    "consumerName": "John Doe",
+    "consumerNumber": "CON240001",
+    "utilityType": "Electricity",
+    "tariffPlan": "Residential Standard",
+    "billingMonth": 1,
+"billingYear": 2024,
+    "billingPeriod": "January 2024",
+    "billDate": "2024-01-20",
+    "dueDate": "2024-02-05",
+    "previousReading": 1000.00,
+    "currentReading": 1500.00,
+    "unitsConsumed": 500.00,
+    "ratePerUnit": 0.12,
+    "energyCharges": 60.00,
+    "fixedCharges": 10.00,
+ "taxAmount": 5.60,
+    "penaltyAmount": 0.00,
+    "previousBalance": 0.00,
+  "totalAmount": 75.60,
+  "amountPaid": 0.00,
+    "outstandingBalance": 75.60,
+    "status": "Generated|Due|PartiallyPaid|Paid|Overdue|Cancelled",
+    "payments": [...]
+  }
+}
+
+GET /api/bills/number/{billNumber}
+GET /api/bills/connection/{connectionId}
+GET /api/bills/consumer/{consumerId}
+GET /api/bills/my-bills (Consumer role)
+GET /api/bills/overdue
+GET /api/bills/summary?billingMonth=&billingYear=
+
+POST /api/bills/generate
+Request Body:
+{
+  "connectionId": 1,
+  "billingMonth": 1,
+  "billingYear": 2024,
+  "meterReadingId": null
+}
+
+POST /api/bills/generate-bulk
+Request Body:
+{
+  "billingMonth": 1,
+  "billingYear": 2024,
+  "connectionIds": [1, 2, 3] // or null for all
+}
+
+PUT /api/bills/{id}/status
+POST /api/bills/update-overdue
+DELETE /api/bills/{id}
+
+----- PAYMENT ENDPOINTS -----
+
+GET /api/payments?pageNumber=1&pageSize=10&paymentMethod=&fromDate=&toDate=
+GET /api/payments/{id}
+GET /api/payments/number/{paymentNumber}
+GET /api/payments/bill/{billId}
+GET /api/payments/consumer/{consumerId}
+GET /api/payments/my-payments (Consumer role)
+GET /api/payments/summary?fromDate=&toDate=
+
+POST /api/payments
+Request Body:
+{
+  "billId": 1,
+  "amount": 75.60,
+  "paymentDate": "2024-01-25",
+  "paymentMethod": "Cash|CreditCard|DebitCard|BankTransfer|OnlinePayment|Cheque|UPI",
+  "transactionReference": "TXN123456",
+  "notes": "string"
+}
+
+PUT /api/payments/{id}/status
+
+----- BILLING CYCLE ENDPOINTS -----
+
+GET /api/billingcycles?year=2024
+GET /api/billingcycles/{id}
+GET /api/billingcycles/current
+
+POST /api/billingcycles
+Request Body:
+{
+  "month": 1,
+  "year": 2024,
+  "startDate": "2024-01-01",
+  "endDate": "2024-01-31",
+  "billGenerationDate": "2024-02-01",
+  "dueDate": "2024-02-15"
+}
+
+PUT /api/billingcycles/{id}
+DELETE /api/billingcycles/{id}
+
+----- NOTIFICATION ENDPOINTS -----
+
+GET /api/notifications?isRead=false
+GET /api/notifications/summary
+GET /api/notifications/{id}
+POST /api/notifications (Admin only)
+PUT /api/notifications/{id}/read
+PUT /api/notifications/read-all
+DELETE /api/notifications/{id}
+
+----- REPORT ENDPOINTS -----
+
+GET /api/reports/dashboard
+Response:
+{
+  "success": true,
+  "data": {
+    "totalConsumers": 150,
+    "activeConnections": 200,
+    "pendingBills": 45,
+    "overdueBills": 12,
+    "totalRevenueThisMonth": 25000.00,
+    "totalOutstanding": 15000.00,
+    "recentActivities": [...],
+  "consumptionByUtilityType": [...]
+  }
+}
+
+GET /api/reports/revenue/monthly?month=1&year=2024
+GET /api/reports/revenue/yearly?year=2024
+GET /api/reports/outstanding-dues
+GET /api/reports/consumption?month=1&year=2024
+GET /api/reports/consumer-billing/{consumerId}
+GET /api/reports/collection?fromDate=2024-01-01&toDate=2024-01-31
+
+================================================================================
+      ANGULAR PROJECT STRUCTURE
+================================================================================
+
+src/
+├── app/
+│├── core/        # Core module
+│   │   ├── guards/
+│   │   │   ├── auth.guard.ts
+│   │   │   └── role.guard.ts
+│   │   ├── interceptors/
+│ │   │ ├── auth.interceptor.ts    # Add JWT token to requests
+│   │   │   └── error.interceptor.ts   # Global error handling
+│   │   ├── services/
+│   │   │   ├── auth.service.ts
+│   │   │   ├── storage.service.ts
+│   │   │   └── notification.service.ts
+│   │   └── models/
+│   │  ├── user.model.ts
+│   │       └── api-response.model.ts
+│   │
+│   ├── shared/       # Shared module
+│   │   ├── components/
+│   │   │   ├── navbar/
+│   │   │   ├── sidebar/
+│   │   │   ├── footer/
+│   │   │   ├── loading-spinner/
+│   │   │   ├── confirm-dialog/
+│   │   │   └── data-table/
+│   │   ├── pipes/
+│   │   │   ├── currency-format.pipe.ts
+│   │   │   └── date-format.pipe.ts
+│   │   └── directives/
+│   │       └── has-role.directive.ts
+│   │
+│   ├── features/ # Feature modules (lazy loaded)
+│   │   ├── auth/
+│   │   │   ├── login/
+│   │   │   ├── change-password/
+│   │   │   └── auth.service.ts
+│   │   │
+│   │   ├── dashboard/
+│   │   │   ├── dashboard.component.ts
+│   │   │   ├── widgets/
+│   │   │   │   ├── stats-card/
+│   │   │   │   ├── recent-activities/
+│   │   │ │   └── consumption-chart/
+│   │   │   └── dashboard.routes.ts
+│   │   │
+│   │   ├── consumers/
+│   │   │   ├── consumer-list/
+│   │   │   ├── consumer-detail/
+│   │   │   ├── consumer-form/
+│   │   │   ├── consumer.service.ts
+│   │   │   └── consumers.routes.ts
+│   │   │
+│   │   ├── connections/
+│   │   │   ├── connection-list/
+│   │   │   ├── connection-detail/
+│   │   │   ├── connection-form/
+│   │   │   ├── connection.service.ts
+│   │   │   └── connections.routes.ts
+│ │   │
+│   │   ├── meter-readings/
+│   │   │   ├── reading-list/
+│   │   │   ├── reading-entry/
+│   │   │   ├── bulk-reading-entry/
+│   │   │   ├── meter-reading.service.ts
+│   │   │   └── meter-readings.routes.ts
+│   │   │
+│   │   ├── billing/
+│ │   │   ├── bill-list/
+│   │   │   ├── bill-detail/
+│   │   │   ├── bill-generate/
+│   │   │   ├── bulk-bill-generate/
+│   │   │   ├── bill.service.ts
+│   │   │   └── billing.routes.ts
+│   │   │
+│   │   ├── payments/
+│   │   │   ├── payment-list/
+│   │   │ ├── payment-detail/
+│   │   │├── payment-record/
+││   │   ├── payment.service.ts
+│   │   │   └── payments.routes.ts
+│   │   │
+│   │   ├── reports/
+│   │   │   ├── dashboard-report/
+││   │   ├── revenue-report/
+││   │   ├── outstanding-dues-report/
+│   │   │   ├── consumption-report/
+│   │   │   ├── collection-report/
+│   │   │   ├── report.service.ts
+│   │   │   └── reports.routes.ts
+│   │   │
+│   │├── admin/
+│   │   │   ├── user-management/
+│   │   │   ├── utility-types/
+│   │   │   ├── tariff-plans/
+│   │   │   ├── billing-cycles/
+│   │   │   └── admin.routes.ts
+│   │   │
+│   │   └── consumer-portal/   # Consumer-specific views
+│   │       ├── my-bills/
+│   │     ├── my-payments/
+│   │    ├── my-profile/
+│   │       └── consumer-portal.routes.ts
+│   │
+│   ├── layouts/
+│   │   ├── main-layout/ # Layout with sidebar for staff
+│   │   ├── consumer-layout/       # Layout for consumers
+│   │   └── auth-layout/    # Layout for login pages
+│   │
+│   ├── app.component.ts
+│   ├── app.config.ts
+│   └── app.routes.ts
+│
+├── assets/
+│   ├── images/
+│   └── icons/
+│
+├── environments/
+│   ├── environment.ts
+│   └── environment.prod.ts
+│
+└── styles.scss         # Global styles with Angular Material theme
+
+================================================================================
+       REQUIRED PAGES/COMPONENTS
+================================================================================
+
+1. LOGIN PAGE
+   - Email and password fields
+   - Remember me checkbox
+   - Error handling for invalid credentials
+   - Redirect based on role after login
+
+2. DASHBOARD (Role-based)
+   - Stats cards: Total Consumers, Active Connections, Pending Bills, Overdue Bills
+   - Revenue this month
+   - Total outstanding
+   - Recent activities list
+   - Consumption chart by utility type
+   - Quick action buttons
+
+3. CONSUMER MANAGEMENT
+   - Consumer list with search, filter, pagination
+   - Consumer detail view with connections
+   - Add/Edit consumer form
+ - Delete consumer with confirmation
+
+4. CONNECTION MANAGEMENT
+   - Connection list with filters (utility type, status)
+   - Connection detail view
+   - Add new connection for consumer
+   - Update connection status/tariff
+
+5. METER READING ENTRY
+   - Single reading entry form
+   - Bulk reading entry (table format)
+   - Previous reading display
+   - Validation (current >= previous)
+   - List of readings with filters
+
+6. BILLS & INVOICES
+   - Bill list with status filters
+   - Bill detail/invoice view (printable)
+   - Generate single bill
+   - Bulk bill generation
+   - Overdue bills list
+   - Bill summary stats
+
+7. PAYMENT HISTORY
+   - Payment list with filters (date range, method)
+   - Record new payment
+   - Payment receipt view
+   - Payment summary/stats
+
+8. REPORTS
+   - Dashboard summary
+   - Monthly/Yearly revenue reports with charts
+   - Outstanding dues report
+   - Consumption report by utility type
+   - Collection report
+   - Consumer billing summary
+
+9. ADMIN PANEL
+   - User management (CRUD)
+   - Utility types management
+   - Tariff plans management
+   - Billing cycles management
+
+10. CONSUMER PORTAL (for Consumer role)
+    - My Profile
+ - My Bills list
+ - Bill detail/download
+    - My Payments history
+    - Notifications
+
+================================================================================
+           AUTHENTICATION FLOW
+================================================================================
+
+1. User enters email/password on login page
+2. POST to /api/auth/login
+3. On success, store token in localStorage/sessionStorage
+4. Decode JWT to get user info and role
+5. Add Authorization header to all API requests via interceptor
+6. Route guards check authentication and role
+7. On 401 error, redirect to login
+8. Logout clears storage and redirects to login
+
+JWT Token Structure (claims):
+- nameid: user ID
+- email: user email
+- name: full name
+- role: user role
+- userId: user ID
+
+================================================================================
+          UI/UX REQUIREMENTS
+================================================================================
+
+1. Use Angular Material components throughout
+2. Responsive design (desktop + tablet + mobile)
+3. Dark/Light theme toggle (optional)
+4. Loading spinners for async operations
+5. Toast notifications for success/error messages
+6. Confirmation dialogs for delete operations
+7. Form validation with error messages
+8. Data tables with sorting, filtering, pagination
+9. Charts for reports (line, bar, pie charts)
+10. Print-friendly bill/invoice layout
+11. Sidebar navigation with icons
+12. Breadcrumb navigation
+13. User profile dropdown in header
+
+================================================================================
+   SAMPLE ENVIRONMENT CONFIG
+================================================================================
+
+// environment.ts
+export const environment = {
+  production: false,
+  apiUrl: 'https://localhost:7027/api',
+  tokenKey: 'utility_billing_token',
+  userKey: 'utility_billing_user'
+};
+
+================================================================================
+     HTTP INTERCEPTOR EXAMPLE
+================================================================================
+
+// auth.interceptor.ts
+@Injectable()
+export class AuthInterceptor implements HttpInterceptor {
+  intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+    const token = localStorage.getItem('utility_billing_token');
+    
+    if (token) {
+      req = req.clone({
+        setHeaders: {
+       Authorization: `Bearer ${token}`
+        }
+      });
+    }
+    
+    return next.handle(req);
+  }
+}
+
+================================================================================
+        ROLE-BASED ACCESS MATRIX
+================================================================================
+
+| Feature              | Admin | BillingOfficer | AccountOfficer | Consumer |
+|----------------------|-------|----------------|----------------|----------|
+| Dashboard            |   ✓   |  ✓        |       ✓   |    ✓     |
+| User Management      |   ✓   |                |      |          |
+| Utility Types        |   ✓   |    View   |       View     |          |
+| Tariff Plans  |   ✓   |       View     |       View     |      |
+| Consumer Management  |   ✓   |       ✓        |       ✓        |    |
+| Connection Mgmt      |   ✓   |       ✓        |View | |
+| Meter Readings       |   ✓   |       ✓        |    |          |
+| Bill Generation      |   ✓   |       ✓        |      |          |
+| View Bills           |   ✓   |       ✓        |       ✓    |   Own    |
+| Record Payments      |   ✓   |  |       ✓        |          |
+| View Payments        |   ✓   |           |       ✓     |   Own    |
+| Reports         |   ✓   |     Some       |       ✓  |          |
+| Billing Cycles       |   ✓   |✓        |         |          |
+| My Profile         |   ✓   | ✓        |   ✓        |    ✓     |
+| Notifications|   ✓   |       ✓        |       ✓        |    ✓     |
+
+================================================================================
+       DEFAULT LOGIN CREDENTIALS
+================================================================================
+
+Admin User:
+- Email: admin@utilitybilling.com
+- Password: Admin@123
+
+================================================================================
+                   ADDITIONAL NOTES
+================================================================================
+
+1. All API responses follow this structure:
+   {
+     "success": boolean,
+     "message": string,
+   "data": T | null,
+     "errors": string[] | null
+   }
+
+2. Paginated responses include:
+   {
+     "success": true,
+     "data": [...],
+     "pageNumber": number,
+     "pageSize": number,
+     "totalPages": number,
+     "totalRecords": number,
+     "hasPrevious": boolean,
+     "hasNext": boolean
+   }
+
+3. Date format: ISO 8601 (2024-01-15T00:00:00Z)
+
+4. Currency: Display with 2 decimal places
+
+5. Bill Status values: Generated, Due, PartiallyPaid, Paid, Overdue, Cancelled
+
+6. Connection Status values: Active, Inactive, Suspended, Disconnected
+
+7. Payment Methods: Cash, CreditCard, DebitCard, BankTransfer, OnlinePayment, Cheque, UPI
+
+

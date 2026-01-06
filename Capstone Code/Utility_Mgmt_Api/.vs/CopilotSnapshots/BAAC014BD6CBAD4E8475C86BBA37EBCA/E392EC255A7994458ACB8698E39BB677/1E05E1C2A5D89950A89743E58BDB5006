@@ -1,0 +1,164 @@
+﻿using Xunit;
+using UtilityManagmentApi.DTOs.Consumer;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.Services.Implementations;
+using UtilityManagmentApi.Tests.Helpers;
+
+namespace UtilityManagmentApi.Tests.Services;
+
+public class ConsumerServiceTests
+{
+    [Fact]
+ public async Task CreateAsync_ValidConsumer_CreatesSuccessfully()
+    {
+  // Arrange
+     var context = TestDbContextFactory.CreateInMemoryContext("ConsumerTest_Create");
+    var service = new ConsumerService(context);
+
+ var dto = new CreateConsumerDto
+     {
+     FirstName = "Jane",
+  LastName = "Smith",
+    Email = "jane@test.com",
+      Password = "Test@123",
+  Phone = "9876543210",
+        Address = "456 Test Ave",
+     City = "Test City",
+           State = "Test State",
+     PostalCode = "54321"
+   };
+
+        // Act
+     var result = await service.CreateAsync(dto);
+
+ // Assert
+      Assert.True(result.Success);
+      Assert.NotNull(result.Data);
+       Assert.Equal("Jane", result.Data.FirstName);
+     Assert.StartsWith("CON", result.Data.ConsumerNumber);
+    }
+
+[Fact]
+ public async Task CreateAsync_DuplicateEmail_ReturnsError()
+    {
+   // Arrange
+ var context = TestDbContextFactory.CreateInMemoryContext("ConsumerTest_Duplicate");
+        var service = new ConsumerService(context);
+
+    var dto = new CreateConsumerDto
+  {
+      FirstName = "Admin",
+    LastName = "User",
+    Email = "admin@utilitybilling.com", // Already exists
+     Password = "Test@123",
+            Address = "123 Test St"
+  };
+
+ // Act
+   var result = await service.CreateAsync(dto);
+
+   // Assert
+     Assert.False(result.Success);
+        Assert.Equal("Email already exists", result.Message);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WithPagination_ReturnsPaginatedResults()
+  {
+    // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("ConsumerTest_Pagination");
+        await TestDbContextFactory.SeedTestDataAsync(context);
+  var service = new ConsumerService(context);
+
+     // Act
+        var result = await service.GetAllAsync(new PaginationParams
+      {
+PageNumber = 1,
+       PageSize = 10
+     });
+
+   // Assert
+ Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+  Assert.True(result.TotalRecords >= 1);
+    }
+
+  [Fact]
+    public async Task GetAllAsync_WithSearch_ReturnsFilteredResults()
+    {
+      // Arrange
+ var context = TestDbContextFactory.CreateInMemoryContext("ConsumerTest_Search");
+        await TestDbContextFactory.SeedTestDataAsync(context);
+    var service = new ConsumerService(context);
+
+    // Act
+   var result = await service.GetAllAsync(new PaginationParams
+        {
+    PageNumber = 1,
+    PageSize = 10,
+      SearchTerm = "John"
+        });
+
+        // Assert
+     Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+    Assert.All(result.Data, c => Assert.Contains("John", c.FullName));
+    }
+
+ [Fact]
+    public async Task UpdateAsync_ValidUpdate_UpdatesSuccessfully()
+    {
+        // Arrange
+  var context = TestDbContextFactory.CreateInMemoryContext("ConsumerTest_Update");
+  await TestDbContextFactory.SeedTestDataAsync(context);
+   var service = new ConsumerService(context);
+
+        var dto = new UpdateConsumerDto
+        {
+   FirstName = "Updated",
+     City = "New City"
+ };
+
+     // Act
+        var result = await service.UpdateAsync(1, dto);
+
+        // Assert
+  Assert.True(result.Success);
+     Assert.NotNull(result.Data);
+      Assert.Equal("Updated", result.Data.FirstName);
+        Assert.Equal("New City", result.Data.City);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ActiveConnections_ReturnsError()
+    {
+        // Arrange
+       var context = TestDbContextFactory.CreateInMemoryContext("ConsumerTest_DeleteActive");
+  await TestDbContextFactory.SeedTestDataAsync(context);
+        var service = new ConsumerService(context);
+
+        // Act
+        var result = await service.DeleteAsync(1);
+
+        // Assert
+     Assert.False(result.Success);
+        Assert.Contains("active connections", result.Message);
+    }
+
+    [Fact]
+ public async Task SearchAsync_ValidTerm_ReturnsResults()
+  {
+    // Arrange
+  var context = TestDbContextFactory.CreateInMemoryContext("ConsumerTest_SearchMethod");
+      await TestDbContextFactory.SeedTestDataAsync(context);
+   var service = new ConsumerService(context);
+
+        // Act
+       var result = await service.SearchAsync("CON240001");
+
+   // Assert
+        Assert.True(result.Success);
+ Assert.NotNull(result.Data);
+        Assert.True(result.Data.Count >= 1);
+    }
+}

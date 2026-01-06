@@ -1,0 +1,159 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using UtilityManagmentApi.DTOs.Admin;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.Services.Interfaces;
+using System.Security.Claims;
+
+namespace UtilityManagmentApi.Controllers;
+
+/// <summary>
+/// Admin Controller - Admin only (system administration and configuration)
+/// </summary>
+[ApiController]
+[Route("api/[controller]")]
+[Authorize(Roles = "Admin")]
+public class AdminController : ControllerBase
+{
+    private readonly IAdminService _adminService;
+
+    public AdminController(IAdminService adminService)
+    {
+     _adminService = adminService;
+}
+
+    #region Dashboard
+
+    /// <summary>
+    /// Get Admin Dashboard Summary - Total Users, Active Users, Utility Types, Tariff Plans, etc.
+    /// </summary>
+    [HttpGet("dashboard")]
+    public async Task<IActionResult> GetDashboard()
+    {
+  var result = await _adminService.GetAdminDashboardAsync();
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Recent Activity for Admin Dashboard
+    /// </summary>
+    [HttpGet("recent-activity")]
+    public async Task<IActionResult> GetRecentActivity([FromQuery] int count = 10)
+    {
+   var result = await _adminService.GetRecentActivityAsync(count);
+     return Ok(result);
+    }
+
+    #endregion
+
+    #region System Settings
+
+    /// <summary>
+  /// Get All System Settings
+    /// </summary>
+    [HttpGet("settings")]
+    public async Task<IActionResult> GetAllSettings([FromQuery] string? category = null)
+ {
+     var result = await _adminService.GetAllSettingsAsync(category);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get System Setting by Key
+    /// </summary>
+    [HttpGet("settings/{key}")]
+    public async Task<IActionResult> GetSettingByKey(string key)
+    {
+        var result = await _adminService.GetSettingByKeyAsync(key);
+     if (!result.Success)
+   {
+            return NotFound(result);
+        }
+  return Ok(result);
+    }
+
+    /// <summary>
+    /// Create System Setting
+    /// </summary>
+    [HttpPost("settings")]
+    public async Task<IActionResult> CreateSetting([FromBody] CreateSystemSettingDto dto)
+    {
+        var userId = GetCurrentUserId();
+    var result = await _adminService.CreateSettingAsync(dto, userId);
+      if (!result.Success)
+    {
+      return BadRequest(result);
+        }
+  return CreatedAtAction(nameof(GetSettingByKey), new { key = result.Data!.SettingKey }, result);
+    }
+
+    /// <summary>
+    /// Update System Setting
+    /// </summary>
+    [HttpPut("settings/{key}")]
+    public async Task<IActionResult> UpdateSetting(string key, [FromBody] UpdateSystemSettingDto dto)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _adminService.UpdateSettingAsync(key, dto, userId);
+     if (!result.Success)
+        {
+     return BadRequest(result);
+     }
+      return Ok(result);
+    }
+
+    /// <summary>
+    /// Delete System Setting
+    /// </summary>
+    [HttpDelete("settings/{key}")]
+    public async Task<IActionResult> DeleteSetting(string key)
+  {
+      var result = await _adminService.DeleteSettingAsync(key);
+    if (!result.Success)
+    {
+     return BadRequest(result);
+        }
+  return Ok(result);
+    }
+
+    #endregion
+
+    #region Audit Logs
+
+    /// <summary>
+    /// Get Audit Logs (Paginated)
+    /// </summary>
+    [HttpGet("audit-logs")]
+    public async Task<IActionResult> GetAuditLogs(
+  [FromQuery] PaginationParams paginationParams,
+   [FromQuery] string? entityType = null,
+     [FromQuery] string? action = null,
+    [FromQuery] DateTime? fromDate = null,
+[FromQuery] DateTime? toDate = null)
+    {
+        var result = await _adminService.GetAuditLogsAsync(paginationParams, entityType, action, fromDate, toDate);
+     return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Audit Log by ID
+    /// </summary>
+    [HttpGet("audit-logs/{id}")]
+    public async Task<IActionResult> GetAuditLogById(int id)
+    {
+        var result = await _adminService.GetAuditLogByIdAsync(id);
+  if (!result.Success)
+     {
+       return NotFound(result);
+        }
+        return Ok(result);
+    }
+
+  #endregion
+
+    private int GetCurrentUserId()
+ {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("userId");
+        return int.Parse(userIdClaim!.Value);
+    }
+}

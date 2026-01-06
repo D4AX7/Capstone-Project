@@ -1,0 +1,484 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using System.Security.Claims;
+using UtilityManagmentApi.Controllers;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Consumer;
+using UtilityManagmentApi.Services.Interfaces;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Controllers;
+
+/// <summary>
+/// Unit tests for ConsumersController - Tests consumer management endpoints
+/// </summary>
+public class ConsumersControllerTests
+{
+    private readonly Mock<IConsumerService> _mockConsumerService;
+    private readonly ConsumersController _controller;
+
+    public ConsumersControllerTests()
+    {
+        _mockConsumerService = new Mock<IConsumerService>();
+        _controller = new ConsumersController(_mockConsumerService.Object);
+    }
+
+    private void SetupUserClaims(int userId, string role)
+    {
+        var claims = new List<Claim>
+  {
+        new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+  new Claim(ClaimTypes.Role, role)
+        };
+var identity = new ClaimsIdentity(claims, "TestAuth");
+        var claimsPrincipal = new ClaimsPrincipal(identity);
+
+    _controller.ControllerContext = new ControllerContext
+   {
+      HttpContext = new DefaultHttpContext { User = claimsPrincipal }
+   };
+    }
+
+    #region GetAll Consumers Tests
+
+    [Fact]
+    public async Task GetAll_ReturnsOkResult_WithConsumersList()
+ {
+  // Arrange
+  var paginationParams = new PaginationParams { PageNumber = 1, PageSize = 10 };
+     var consumers = new List<ConsumerListDto>
+        {
+           new ConsumerListDto 
+          { 
+       Id = 1, 
+     ConsumerNumber = "CON240001",
+   FullName = "Michael Brown",
+     Email = "michael.brown@email.com",
+       City = "Springfield",
+     TotalConnections = 2,
+              IsActive = true
+        },
+   new ConsumerListDto 
+  { 
+    Id = 2, 
+    ConsumerNumber = "CON240002",
+                FullName = "Emily Davis",
+   Email = "emily.davis@email.com",
+        City = "Chicago",
+             TotalConnections = 2,
+                IsActive = true
+}
+ };
+
+    var pagedResponse = new PagedResponse<ConsumerListDto>
+ {
+            Data = consumers,
+      TotalRecords = 2,
+      PageNumber = 1,
+         PageSize = 10,
+    TotalPages = 1
+        };
+
+        _mockConsumerService.Setup(s => s.GetAllAsync(paginationParams, null))
+       .ReturnsAsync(pagedResponse);
+
+        // Act
+    var result = await _controller.GetAll(paginationParams, null);
+
+        // Assert
+     var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<PagedResponse<ConsumerListDto>>(okResult.Value);
+Assert.Equal(2, response.Data.Count);
+ }
+
+    [Fact]
+    public async Task GetAll_WithActiveFilter_ReturnsFilteredConsumers()
+  {
+        // Arrange
+   var paginationParams = new PaginationParams { PageNumber = 1, PageSize = 10 };
+var consumers = new List<ConsumerListDto>
+      {
+ new ConsumerListDto { Id = 1, ConsumerNumber = "CON001", IsActive = true }
+ };
+
+        var pagedResponse = new PagedResponse<ConsumerListDto>
+        {
+    Data = consumers,
+     TotalRecords = 1,
+       PageNumber = 1,
+            PageSize = 10
+ };
+
+  _mockConsumerService.Setup(s => s.GetAllAsync(paginationParams, true))
+ .ReturnsAsync(pagedResponse);
+
+        // Act
+  var result = await _controller.GetAll(paginationParams, true);
+
+        // Assert
+      var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<PagedResponse<ConsumerListDto>>(okResult.Value);
+ Assert.Single(response.Data);
+    Assert.True(response.Data[0].IsActive);
+    }
+
+  #endregion
+
+    #region GetById Tests
+
+    [Fact]
+    public async Task GetById_AsAdmin_WithValidId_ReturnsOkResult()
+    {
+ // Arrange
+        SetupUserClaims(1, "Admin");
+    var consumerId = 1;
+        var consumerDto = new ConsumerDto
+     {
+  Id = consumerId,
+  UserId = 5,
+ ConsumerNumber = "CON240001",
+       FirstName = "Michael",
+       LastName = "Brown",
+ Email = "michael.brown@email.com",
+       Address = "123 Oak Street",
+            City = "Springfield",
+   State = "Illinois",
+            PostalCode = "62701",
+      IsActive = true,
+        Connections = new List<ConnectionSummaryDto>
+            {
+new ConnectionSummaryDto { Id = 1, ConnectionNumber = "ELE240001", UtilityType = "Electricity" }
+    }
+  };
+
+      _mockConsumerService.Setup(s => s.GetByIdAsync(consumerId))
+    .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(consumerDto));
+
+    // Act
+  var result = await _controller.GetById(consumerId);
+
+        // Assert
+var okResult = Assert.IsType<OkObjectResult>(result);
+     var response = Assert.IsType<ApiResponse<ConsumerDto>>(okResult.Value);
+        Assert.True(response.Success);
+   Assert.Equal("CON240001", response.Data?.ConsumerNumber);
+    }
+
+    [Fact]
+    public async Task GetById_AsConsumer_WithOwnId_ReturnsOkResult()
+    {
+ // Arrange
+   SetupUserClaims(5, "Consumer");
+   var consumerId = 1;
+
+     var consumerDto = new ConsumerDto
+        {
+         Id = consumerId,
+          UserId = 5,
+     ConsumerNumber = "CON240001",
+      FirstName = "Michael",
+ LastName = "Brown"
+        };
+
+   _mockConsumerService.Setup(s => s.GetByUserIdAsync(5))
+  .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(consumerDto));
+
+        _mockConsumerService.Setup(s => s.GetByIdAsync(consumerId))
+       .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(consumerDto));
+
+     // Act
+  var result = await _controller.GetById(consumerId);
+
+     // Assert
+    var okResult = Assert.IsType<OkObjectResult>(result);
+     var response = Assert.IsType<ApiResponse<ConsumerDto>>(okResult.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task GetById_AsConsumer_WithOthersId_ReturnsForbid()
+  {
+  // Arrange
+   SetupUserClaims(5, "Consumer");
+    var consumerId = 2; // Different consumer
+
+        var ownConsumerDto = new ConsumerDto
+        {
+            Id = 1,
+      UserId = 5,
+ ConsumerNumber = "CON240001"
+   };
+
+        _mockConsumerService.Setup(s => s.GetByUserIdAsync(5))
+ .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(ownConsumerDto));
+
+        // Act
+     var result = await _controller.GetById(consumerId);
+
+   // Assert
+    Assert.IsType<ForbidResult>(result);
+    }
+
+    [Fact]
+  public async Task GetById_WithInvalidId_ReturnsNotFound()
+{
+    // Arrange
+        SetupUserClaims(1, "Admin");
+        var consumerId = 999;
+
+        _mockConsumerService.Setup(s => s.GetByIdAsync(consumerId))
+ .ReturnsAsync(ApiResponse<ConsumerDto>.ErrorResponse("Consumer not found"));
+
+        // Act
+        var result = await _controller.GetById(consumerId);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    #endregion
+
+    #region GetMyProfile Tests (Consumer)
+
+    [Fact]
+    public async Task GetMyProfile_AsConsumer_ReturnsOkResult()
+    {
+  // Arrange
+        SetupUserClaims(5, "Consumer");
+        var consumerDto = new ConsumerDto
+        {
+   Id = 1,
+          UserId = 5,
+       ConsumerNumber = "CON240001",
+  FirstName = "Michael",
+     LastName = "Brown",
+   Email = "michael.brown@email.com",
+    Address = "123 Oak Street",
+            City = "Springfield"
+        };
+
+        _mockConsumerService.Setup(s => s.GetByUserIdAsync(5))
+    .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(consumerDto));
+
+      // Act
+        var result = await _controller.GetMyProfile();
+
+   // Assert
+   var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<ConsumerDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal("CON240001", response.Data?.ConsumerNumber);
+    }
+
+    [Fact]
+  public async Task GetMyProfile_ConsumerNotFound_ReturnsNotFound()
+    {
+  // Arrange
+  SetupUserClaims(999, "Consumer");
+
+        _mockConsumerService.Setup(s => s.GetByUserIdAsync(999))
+   .ReturnsAsync(ApiResponse<ConsumerDto>.ErrorResponse("Consumer not found"));
+
+// Act
+   var result = await _controller.GetMyProfile();
+
+       // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+  }
+
+    #endregion
+
+    #region UpdateMyProfile Tests (Consumer)
+
+  [Fact]
+    public async Task UpdateMyProfile_WithValidData_ReturnsOkResult()
+  {
+        // Arrange
+     SetupUserClaims(5, "Consumer");
+        var updateDto = new UpdateConsumerDto
+        {
+Address = "456 New Street",
+        City = "New City",
+      Phone = "9876543210"
+   };
+
+        var consumerDto = new ConsumerDto
+    {
+            Id = 1,
+     UserId = 5,
+ConsumerNumber = "CON240001"
+        };
+
+  var updatedConsumer = new ConsumerDto
+        {
+    Id = 1,
+UserId = 5,
+         ConsumerNumber = "CON240001",
+    Address = "456 New Street",
+          City = "New City"
+    };
+
+      _mockConsumerService.Setup(s => s.GetByUserIdAsync(5))
+    .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(consumerDto));
+
+        _mockConsumerService.Setup(s => s.UpdateAsync(1, updateDto))
+  .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(updatedConsumer));
+
+      // Act
+      var result = await _controller.UpdateMyProfile(updateDto);
+
+// Assert
+  var okResult = Assert.IsType<OkObjectResult>(result);
+   var response = Assert.IsType<ApiResponse<ConsumerDto>>(okResult.Value);
+        Assert.True(response.Success);
+     Assert.Equal("456 New Street", response.Data?.Address);
+    }
+
+    [Fact]
+    public async Task UpdateMyProfile_ConsumerNotFound_ReturnsNotFound()
+  {
+      // Arrange
+    SetupUserClaims(999, "Consumer");
+ var updateDto = new UpdateConsumerDto { Address = "New Address" };
+
+   _mockConsumerService.Setup(s => s.GetByUserIdAsync(999))
+.ReturnsAsync(ApiResponse<ConsumerDto>.ErrorResponse("Consumer not found"));
+
+ // Act
+        var result = await _controller.UpdateMyProfile(updateDto);
+
+  // Assert
+    Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    #endregion
+
+    #region Create Consumer Tests (Admin)
+
+    [Fact]
+    public async Task Create_WithValidData_ReturnsCreatedResult()
+    {
+// Arrange
+  SetupUserClaims(1, "Admin");
+        var createDto = new CreateConsumerDto
+ {
+        FirstName = "New",
+      LastName = "Consumer",
+   Email = "new.consumer@email.com",
+ Password = "Consumer@123",
+       Phone = "1234567890",
+    Address = "789 Test Street",
+  City = "Test City",
+            State = "Test State",
+     PostalCode = "12345"
+ };
+
+  var consumerDto = new ConsumerDto
+   {
+            Id = 10,
+   UserId = 15,
+            ConsumerNumber = "CON240010",
+FirstName = "New",
+ LastName = "Consumer",
+      Email = "new.consumer@email.com"
+        };
+
+        _mockConsumerService.Setup(s => s.CreateAsync(createDto))
+    .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(consumerDto));
+
+        // Act
+        var result = await _controller.Create(createDto);
+
+      // Assert
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
+      var response = Assert.IsType<ApiResponse<ConsumerDto>>(createdResult.Value);
+        Assert.True(response.Success);
+    Assert.Equal("CON240010", response.Data?.ConsumerNumber);
+    }
+
+    [Fact]
+    public async Task Create_WithExistingEmail_ReturnsBadRequest()
+  {
+        // Arrange
+        SetupUserClaims(1, "Admin");
+        var createDto = new CreateConsumerDto
+        {
+    FirstName = "Test",
+   LastName = "User",
+   Email = "existing@email.com",
+  Password = "Consumer@123",
+    Address = "Test Address",
+    City = "Test City",
+   State = "Test State",
+         PostalCode = "12345"
+  };
+
+        _mockConsumerService.Setup(s => s.CreateAsync(createDto))
+ .ReturnsAsync(ApiResponse<ConsumerDto>.ErrorResponse("Email already exists"));
+
+     // Act
+   var result = await _controller.Create(createDto);
+
+      // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    #endregion
+
+#region Update Consumer Tests (Admin)
+
+    [Fact]
+  public async Task Update_WithValidData_ReturnsOkResult()
+    {
+ // Arrange
+        SetupUserClaims(1, "Admin");
+ var consumerId = 1;
+  var updateDto = new UpdateConsumerDto
+        {
+      FirstName = "Updated",
+ LastName = "Name",
+     IsActive = false
+     };
+
+        var updatedConsumer = new ConsumerDto
+ {
+        Id = consumerId,
+ FirstName = "Updated",
+    LastName = "Name",
+      IsActive = false
+        };
+
+   _mockConsumerService.Setup(s => s.UpdateAsync(consumerId, updateDto))
+   .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(updatedConsumer));
+
+     // Act
+        var result = await _controller.Update(consumerId, updateDto);
+
+// Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+ var response = Assert.IsType<ApiResponse<ConsumerDto>>(okResult.Value);
+        Assert.True(response.Success);
+Assert.Equal("Updated", response.Data?.FirstName);
+    }
+
+    [Fact]
+    public async Task Update_WithInvalidId_ReturnsBadRequest()
+    {
+        // Arrange
+        SetupUserClaims(1, "Admin");
+   var consumerId = 999;
+        var updateDto = new UpdateConsumerDto { FirstName = "Test" };
+
+  _mockConsumerService.Setup(s => s.UpdateAsync(consumerId, updateDto))
+ .ReturnsAsync(ApiResponse<ConsumerDto>.ErrorResponse("Consumer not found"));
+
+ // Act
+        var result = await _controller.Update(consumerId, updateDto);
+
+ // Assert
+ Assert.IsType<BadRequestObjectResult>(result);
+ }
+
+    #endregion
+}

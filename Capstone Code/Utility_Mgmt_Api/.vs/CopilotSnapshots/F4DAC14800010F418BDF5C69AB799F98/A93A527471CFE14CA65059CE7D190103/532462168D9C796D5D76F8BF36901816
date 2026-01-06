@@ -1,0 +1,572 @@
+﻿using Microsoft.EntityFrameworkCore;
+using UtilityManagmentApi.Data.Converters;
+using UtilityManagmentApi.Entities;
+
+namespace UtilityManagmentApi.Data;
+
+public class ApplicationDbContext : DbContext
+{
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
+    {
+    }
+
+    public DbSet<User> Users { get; set; }
+    public DbSet<Consumer> Consumers { get; set; }
+    public DbSet<UtilityType> UtilityTypes { get; set; }
+    public DbSet<TariffPlan> TariffPlans { get; set; }
+    public DbSet<Connection> Connections { get; set; }
+    public DbSet<MeterReading> MeterReadings { get; set; }
+    public DbSet<Bill> Bills { get; set; }
+    public DbSet<Payment> Payments { get; set; }
+    public DbSet<BillingCycle> BillingCycles { get; set; }
+    public DbSet<Notification> Notifications { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // User configuration
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasIndex(e => e.Email).IsUnique();
+            entity.Property(e => e.Role).HasConversion<string>();
+        });
+
+        // Consumer configuration
+        modelBuilder.Entity<Consumer>(entity =>
+        {
+            entity.HasIndex(e => e.ConsumerNumber).IsUnique();
+            entity.HasOne(c => c.User)
+                .WithOne(u => u.Consumer)
+                .HasForeignKey<Consumer>(c => c.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // UtilityType configuration
+        modelBuilder.Entity<UtilityType>(entity =>
+        {
+            entity.HasIndex(e => e.Name).IsUnique();
+        });
+
+        // TariffPlan configuration
+        modelBuilder.Entity<TariffPlan>(entity =>
+        {
+            entity.HasOne(t => t.UtilityType)
+                .WithMany(u => u.TariffPlans)
+                .HasForeignKey(t => t.UtilityTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Connection configuration
+        modelBuilder.Entity<Connection>(entity =>
+        {
+            entity.HasIndex(e => e.MeterNumber).IsUnique();
+            entity.HasIndex(e => e.ConnectionNumber).IsUnique();
+            entity.Property(e => e.Status).HasConversion<string>();
+
+            entity.HasOne(c => c.Consumer)
+                .WithMany(co => co.Connections)
+                .HasForeignKey(c => c.ConsumerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(c => c.UtilityType)
+                .WithMany(u => u.Connections)
+                .HasForeignKey(c => c.UtilityTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(c => c.TariffPlan)
+                .WithMany(t => t.Connections)
+                .HasForeignKey(c => c.TariffPlanId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // MeterReading configuration
+        modelBuilder.Entity<MeterReading>(entity =>
+        {
+            entity.HasIndex(e => new { e.ConnectionId, e.BillingMonth, e.BillingYear }).IsUnique();
+
+            entity.HasOne(m => m.Connection)
+                .WithMany(c => c.MeterReadings)
+                .HasForeignKey(m => m.ConnectionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(m => m.ReadByUser)
+                .WithMany()
+                .HasForeignKey(m => m.ReadByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Bill configuration
+        modelBuilder.Entity<Bill>(entity =>
+        {
+            entity.HasIndex(e => e.BillNumber).IsUnique();
+            entity.HasIndex(e => new { e.ConnectionId, e.BillingMonth, e.BillingYear }).IsUnique();
+            entity.Property(e => e.Status).HasConversion<string>();
+
+            entity.HasOne(b => b.Connection)
+                .WithMany(c => c.Bills)
+                .HasForeignKey(b => b.ConnectionId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(b => b.MeterReading)
+                .WithOne(m => m.Bill)
+                .HasForeignKey<Bill>(b => b.MeterReadingId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(b => b.GeneratedByUser)
+                .WithMany()
+                .HasForeignKey(b => b.GeneratedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Payment configuration
+        modelBuilder.Entity<Payment>(entity =>
+        {
+            entity.HasIndex(e => e.PaymentNumber).IsUnique();
+            entity.Property(e => e.PaymentMethod).HasConversion<string>();
+            entity.Property(e => e.Status).HasConversion<string>();
+
+            entity.HasOne(p => p.Bill)
+                .WithMany(b => b.Payments)
+                .HasForeignKey(p => p.BillId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(p => p.ReceivedByUser)
+                .WithMany()
+                .HasForeignKey(p => p.ReceivedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // BillingCycle configuration with DateOnly converters
+        modelBuilder.Entity<BillingCycle>(entity =>
+        {
+            entity.HasIndex(e => new { e.Month, e.Year }).IsUnique();
+            entity.Property(e => e.Status).HasConversion<string>();
+            entity.Property(e => e.StartDate)
+              .HasColumnType("date")
+              .HasConversion<DateOnlyConverter>();
+            entity.Property(e => e.EndDate)
+              .HasColumnType("date")
+              .HasConversion<DateOnlyConverter>();
+            entity.Property(e => e.BillGenerationDate)
+              .HasColumnType("date")
+              .HasConversion<NullableDateOnlyConverter>();
+            entity.Property(e => e.DueDate)
+              .HasColumnType("date")
+              .HasConversion<NullableDateOnlyConverter>();
+        });
+
+        // Notification configuration
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.Property(e => e.Type).HasConversion<string>();
+
+            entity.HasOne(n => n.User)
+                .WithMany()
+                .HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Seed initial data
+        SeedData(modelBuilder);
+    }
+
+    private void SeedData(ModelBuilder modelBuilder)
+    {
+        var now = new DateTime(2024, 12, 28, 13, 52, 29, DateTimeKind.Utc);
+
+        // Seed Utility Types
+        modelBuilder.Entity<UtilityType>().HasData(
+            new UtilityType { Id = 1, Name = "Electricity", Description = "Electric power supply", UnitOfMeasurement = "kWh", IsActive = true, CreatedAt = now },
+            new UtilityType { Id = 2, Name = "Water", Description = "Water supply", UnitOfMeasurement = "Gallons", IsActive = true, CreatedAt = now },
+            new UtilityType { Id = 3, Name = "Gas", Description = "Natural gas supply", UnitOfMeasurement = "Cubic Feet", IsActive = true, CreatedAt = now },
+            new UtilityType { Id = 4, Name = "Internet", Description = "Internet services", UnitOfMeasurement = "GB", IsActive = true, CreatedAt = now }
+        );
+
+        // Seed Users (Admin + 2 Staff + 5 Consumers)
+        modelBuilder.Entity<User>().HasData(
+            new User
+            {
+                Id = 1,
+                FirstName = "System",
+                LastName = "Administrator",
+                Email = "admin@utilitybilling.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
+                Phone = "1234567890",
+                Role = UserRole.Admin,
+                IsActive = true,
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = 2,
+                FirstName = "John",
+                LastName = "Smith",
+                Email = "billing@utilitybilling.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Billing@123"),
+                Phone = "2345678901",
+                Role = UserRole.BillingOfficer,
+                IsActive = true,
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = 3,
+                FirstName = "Sarah",
+                LastName = "Johnson",
+                Email = "account@utilitybilling.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Account@123"),
+                Phone = "3456789012",
+                Role = UserRole.AccountOfficer,
+                IsActive = true,
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = 4,
+                FirstName = "Michael",
+                LastName = "Brown",
+                Email = "michael.brown@email.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Consumer@123"),
+                Phone = "4567890123",
+                Role = UserRole.Consumer,
+                IsActive = true,
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = 5,
+                FirstName = "Emily",
+                LastName = "Davis",
+                Email = "emily.davis@email.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Consumer@123"),
+                Phone = "5678901234",
+                Role = UserRole.Consumer,
+                IsActive = true,
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = 6,
+                FirstName = "David",
+                LastName = "Wilson",
+                Email = "david.wilson@email.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Consumer@123"),
+                Phone = "6789012345",
+                Role = UserRole.Consumer,
+                IsActive = true,
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = 7,
+                FirstName = "Jessica",
+                LastName = "Martinez",
+                Email = "jessica.martinez@email.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Consumer@123"),
+                Phone = "7890123456",
+                Role = UserRole.Consumer,
+                IsActive = true,
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = 8,
+                FirstName = "Robert",
+                LastName = "Anderson",
+                Email = "robert.anderson@email.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Consumer@123"),
+                Phone = "8901234567",
+                Role = UserRole.Consumer,
+                IsActive = true,
+                CreatedAt = now
+            }
+        );
+
+        // Seed Consumers (5 consumers)
+        modelBuilder.Entity<Consumer>().HasData(
+            new Consumer
+            {
+                Id = 1,
+                UserId = 4,
+                ConsumerNumber = "CON240001",
+                Address = "123 Oak Street",
+                City = "Springfield",
+                State = "Illinois",
+                PostalCode = "62701",
+                RegistrationDate = now.AddMonths(-6),
+                IsActive = true,
+                CreatedAt = now
+            },
+            new Consumer
+            {
+                Id = 2,
+                UserId = 5,
+                ConsumerNumber = "CON240002",
+                Address = "456 Maple Avenue",
+                City = "Chicago",
+                State = "Illinois",
+                PostalCode = "60601",
+                RegistrationDate = now.AddMonths(-5),
+                IsActive = true,
+                CreatedAt = now
+            },
+            new Consumer
+            {
+                Id = 3,
+                UserId = 6,
+                ConsumerNumber = "CON240003",
+                Address = "789 Pine Road",
+                City = "Aurora",
+                State = "Illinois",
+                PostalCode = "60505",
+                RegistrationDate = now.AddMonths(-4),
+                IsActive = true,
+                CreatedAt = now
+            },
+            new Consumer
+            {
+                Id = 4,
+                UserId = 7,
+                ConsumerNumber = "CON240004",
+                Address = "321 Elm Boulevard",
+                City = "Naperville",
+                State = "Illinois",
+                PostalCode = "60540",
+                RegistrationDate = now.AddMonths(-3),
+                IsActive = true,
+                CreatedAt = now
+            },
+            new Consumer
+            {
+                Id = 5,
+                UserId = 8,
+                ConsumerNumber = "CON240005",
+                Address = "654 Cedar Lane",
+                City = "Rockford",
+                State = "Illinois",
+                PostalCode = "61101",
+                RegistrationDate = now.AddMonths(-2),
+                IsActive = true,
+                CreatedAt = now
+            }
+        );
+
+        // Seed Connections (9 connections for 5 consumers)
+        modelBuilder.Entity<Connection>().HasData(
+            new Connection
+            {
+                Id = 1,
+                ConsumerId = 1,
+                UtilityTypeId = 1,
+                TariffPlanId = 1,
+                MeterNumber = "ELE-M001",
+                ConnectionNumber = "ELE240001",
+                ConnectionDate = now.AddMonths(-6),
+                Status = ConnectionStatus.Active,
+                LoadSanctioned = 5.0m,
+                InstallationAddress = "123 Oak Street, Springfield, IL 62701",
+                CreatedAt = now
+            },
+            new Connection
+            {
+                Id = 2,
+                ConsumerId = 1,
+                UtilityTypeId = 2,
+                TariffPlanId = 3,
+                MeterNumber = "WAT-M001",
+                ConnectionNumber = "WAT240001",
+                ConnectionDate = now.AddMonths(-6),
+                Status = ConnectionStatus.Active,
+                InstallationAddress = "123 Oak Street, Springfield, IL 62701",
+                CreatedAt = now
+            },
+            new Connection
+            {
+                Id = 3,
+                ConsumerId = 2,
+                UtilityTypeId = 1,
+                TariffPlanId = 1,
+                MeterNumber = "ELE-M002",
+                ConnectionNumber = "ELE240002",
+                ConnectionDate = now.AddMonths(-5),
+                Status = ConnectionStatus.Active,
+                LoadSanctioned = 7.0m,
+                InstallationAddress = "456 Maple Avenue, Chicago, IL 60601",
+                CreatedAt = now
+            },
+            new Connection
+            {
+                Id = 4,
+                ConsumerId = 2,
+                UtilityTypeId = 3,
+                TariffPlanId = 4,
+                MeterNumber = "GAS-M001",
+                ConnectionNumber = "GAS240001",
+                ConnectionDate = now.AddMonths(-5),
+                Status = ConnectionStatus.Active,
+                InstallationAddress = "456 Maple Avenue, Chicago, IL 60601",
+                CreatedAt = now
+            },
+            new Connection
+            {
+                Id = 5,
+                ConsumerId = 3,
+                UtilityTypeId = 1,
+                TariffPlanId = 2,
+                MeterNumber = "ELE-M003",
+                ConnectionNumber = "ELE240003",
+                ConnectionDate = now.AddMonths(-4),
+                Status = ConnectionStatus.Active,
+                LoadSanctioned = 25.0m,
+                InstallationAddress = "789 Pine Road, Aurora, IL 60505",
+                CreatedAt = now
+            },
+            new Connection
+            {
+                Id = 6,
+                ConsumerId = 4,
+                UtilityTypeId = 1,
+                TariffPlanId = 1,
+                MeterNumber = "ELE-M004",
+                ConnectionNumber = "ELE240004",
+                ConnectionDate = now.AddMonths(-3),
+                Status = ConnectionStatus.Active,
+                LoadSanctioned = 5.0m,
+                InstallationAddress = "321 Elm Boulevard, Naperville, IL 60540",
+                CreatedAt = now
+            },
+            new Connection
+            {
+                Id = 7,
+                ConsumerId = 4,
+                UtilityTypeId = 4,
+                TariffPlanId = 5,
+                MeterNumber = "INT-M001",
+                ConnectionNumber = "INT240001",
+                ConnectionDate = now.AddMonths(-3),
+                Status = ConnectionStatus.Active,
+                InstallationAddress = "321 Elm Boulevard, Naperville, IL 60540",
+                CreatedAt = now
+            },
+            new Connection
+            {
+                Id = 8,
+                ConsumerId = 5,
+                UtilityTypeId = 1,
+                TariffPlanId = 1,
+                MeterNumber = "ELE-M005",
+                ConnectionNumber = "ELE240005",
+                ConnectionDate = now.AddMonths(-2),
+                Status = ConnectionStatus.Suspended,
+                LoadSanctioned = 5.0m,
+                InstallationAddress = "654 Cedar Lane, Rockford, IL 61101",
+                CreatedAt = now
+            },
+            new Connection
+            {
+                Id = 9,
+                ConsumerId = 5,
+                UtilityTypeId = 2,
+                TariffPlanId = 3,
+                MeterNumber = "WAT-M002",
+                ConnectionNumber = "WAT240002",
+                ConnectionDate = now.AddMonths(-2),
+                Status = ConnectionStatus.Active,
+                InstallationAddress = "654 Cedar Lane, Rockford, IL 61101",
+                CreatedAt = now
+            }
+        );
+
+        // Seed Tariff Plans
+        modelBuilder.Entity<TariffPlan>().HasData(
+            new TariffPlan
+            {
+                Id = 1,
+                Name = "Residential Electricity - Standard",
+                Description = "Standard residential electricity tariff",
+                UtilityTypeId = 1,
+                RatePerUnit = 0.12m,
+                FixedCharges = 10.00m,
+                TaxPercentage = 8.00m,
+                LatePaymentPenalty = 25.00m,
+                IsActive = true,
+                EffectiveFrom = new DateTime(2024, 1, 1),
+                CreatedAt = now
+            },
+            new TariffPlan
+            {
+                Id = 2,
+                Name = "Commercial Electricity - Standard",
+                Description = "Standard commercial electricity tariff",
+                UtilityTypeId = 1,
+                RatePerUnit = 0.15m,
+                FixedCharges = 25.00m,
+                TaxPercentage = 10.00m,
+                LatePaymentPenalty = 50.00m,
+                IsActive = true,
+                EffectiveFrom = new DateTime(2024, 1, 1),
+                CreatedAt = now
+            },
+            new TariffPlan
+            {
+                Id = 3,
+                Name = "Residential Water - Standard",
+                Description = "Standard residential water tariff",
+                UtilityTypeId = 2,
+                RatePerUnit = 0.005m,
+                FixedCharges = 5.00m,
+                TaxPercentage = 5.00m,
+                LatePaymentPenalty = 15.00m,
+                IsActive = true,
+                EffectiveFrom = new DateTime(2024, 1, 1),
+                CreatedAt = now
+            },
+            new TariffPlan
+            {
+                Id = 4,
+                Name = "Residential Gas - Standard",
+                Description = "Standard residential gas tariff",
+                UtilityTypeId = 3,
+                RatePerUnit = 0.02m,
+                FixedCharges = 8.00m,
+                TaxPercentage = 6.00m,
+                LatePaymentPenalty = 20.00m,
+                IsActive = true,
+                EffectiveFrom = new DateTime(2024, 1, 1),
+                CreatedAt = now
+            },
+            new TariffPlan
+            {
+                Id = 5,
+                Name = "Internet - Basic Plan",
+                Description = "Basic internet plan - 100GB",
+                UtilityTypeId = 4,
+                RatePerUnit = 0.50m,
+                FixedCharges = 29.99m,
+                TaxPercentage = 8.00m,
+                LatePaymentPenalty = 10.00m,
+                IsActive = true,
+                EffectiveFrom = new DateTime(2024, 1, 1),
+                CreatedAt = now
+            }
+        );
+
+        // Seed Billing Cycle
+        modelBuilder.Entity<BillingCycle>().HasData(
+            new BillingCycle
+            {
+                Id = 1,
+                Name = "December 2024",
+                Month = 12,
+                Year = 2024,
+                StartDate = new DateOnly(2024, 12, 1),
+                EndDate = new DateOnly(2024, 12, 31),
+                BillGenerationDate = new DateOnly(2025, 1, 5),
+                DueDate = new DateOnly(2025, 1, 20),
+                Status = BillingCycleStatus.Open,
+                CreatedAt = now
+            }
+        );
+    }
+}

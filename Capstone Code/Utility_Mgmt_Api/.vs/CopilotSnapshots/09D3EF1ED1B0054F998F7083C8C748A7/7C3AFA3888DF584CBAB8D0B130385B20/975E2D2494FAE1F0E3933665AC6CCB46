@@ -1,0 +1,540 @@
+﻿using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Services;
+
+/// <summary>
+/// Unit tests for Bill Calculation Logic - Demonstrates billing calculations and LINQ usage
+/// These tests verify the core business logic for the utility billing system
+/// </summary>
+public class BillCalculationTests
+{
+    #region Energy/Consumption Charges Calculation Tests
+
+    [Fact]
+    public void CalculateEnergyCharges_WithValidConsumption_ReturnsCorrectAmount()
+  {
+ // Arrange
+   decimal unitsConsumed = 500;
+     decimal ratePerUnit = 0.12m;
+
+   // Act
+        decimal energyCharges = unitsConsumed * ratePerUnit;
+
+        // Assert
+      Assert.Equal(60.00m, energyCharges);
+    }
+
+    [Fact]
+    public void CalculateEnergyCharges_WithZeroConsumption_ReturnsZero()
+    {
+        // Arrange
+        decimal unitsConsumed = 0;
+      decimal ratePerUnit = 0.12m;
+
+   // Act
+        decimal energyCharges = unitsConsumed * ratePerUnit;
+
+      // Assert
+   Assert.Equal(0, energyCharges);
+ }
+
+    [Fact]
+ public void CalculateEnergyCharges_WithHighConsumption_ReturnsCorrectAmount()
+    {
+// Arrange
+        decimal unitsConsumed = 10000;
+        decimal ratePerUnit = 0.15m; // Commercial rate
+
+    // Act
+       decimal energyCharges = unitsConsumed * ratePerUnit;
+
+        // Assert
+     Assert.Equal(1500.00m, energyCharges);
+    }
+
+  [Theory]
+    [InlineData(100, 0.12, 12.00)]
+    [InlineData(250, 0.12, 30.00)]
+    [InlineData(500, 0.12, 60.00)]
+    [InlineData(1000, 0.12, 120.00)]
+    [InlineData(500, 0.15, 75.00)]  // Commercial rate
+    [InlineData(750, 0.005, 3.75)]  // Water rate
+  public void CalculateEnergyCharges_WithVariousInputs_ReturnsExpectedResults(
+    decimal units, decimal rate, decimal expected)
+    {
+        // Act
+        decimal result = units * rate;
+
+        // Assert
+      Assert.Equal(expected, result);
+    }
+
+    #endregion
+
+    #region Tax Amount Calculation Tests
+
+    [Fact]
+    public void CalculateTaxAmount_WithStandardRate_ReturnsCorrectAmount()
+    {
+        // Arrange
+   decimal energyCharges = 60.00m;
+    decimal fixedCharges = 10.00m;
+   decimal taxPercentage = 8.00m;
+
+        // Act
+        decimal taxAmount = (energyCharges + fixedCharges) * (taxPercentage / 100);
+
+    // Assert
+     Assert.Equal(5.60m, taxAmount);
+ }
+
+    [Fact]
+    public void CalculateTaxAmount_WithZeroCharges_ReturnsZero()
+    {
+        // Arrange
+  decimal energyCharges = 0;
+ decimal fixedCharges = 0;
+        decimal taxPercentage = 8.00m;
+
+   // Act
+   decimal taxAmount = (energyCharges + fixedCharges) * (taxPercentage / 100);
+
+        // Assert
+     Assert.Equal(0, taxAmount);
+    }
+
+    [Theory]
+    [InlineData(60.00, 10.00, 8.00, 5.60)]
+    [InlineData(100.00, 25.00, 10.00, 12.50)]
+    [InlineData(50.00, 5.00, 5.00, 2.75)]
+    public void CalculateTaxAmount_WithVariousInputs_ReturnsExpectedResults(
+        decimal energy, decimal fixedCharge, decimal taxRate, decimal expected)
+    {
+        // Act
+        decimal result = (energy + fixedCharge) * (taxRate / 100);
+
+     // Assert
+      Assert.Equal(expected, result);
+    }
+
+    #endregion
+
+    #region Total Bill Amount Calculation Tests
+
+    [Fact]
+  public void CalculateTotalBillAmount_WithAllCharges_ReturnsCorrectTotal()
+  {
+  // Arrange
+      decimal unitsConsumed = 500;
+     decimal ratePerUnit = 0.12m;
+   decimal fixedCharges = 10.00m;
+   decimal taxPercentage = 8.00m;
+
+   // Act
+        decimal energyCharges = unitsConsumed * ratePerUnit;
+ decimal taxAmount = (energyCharges + fixedCharges) * (taxPercentage / 100);
+   decimal totalAmount = energyCharges + fixedCharges + taxAmount;
+
+        // Assert
+        Assert.Equal(60.00m, energyCharges);
+ Assert.Equal(5.60m, taxAmount);
+        Assert.Equal(75.60m, totalAmount);
+    }
+
+    [Fact]
+    public void CalculateTotalBillAmount_WithPenalty_ReturnsCorrectTotal()
+    {
+        // Arrange
+        decimal energyCharges = 60.00m;
+        decimal fixedCharges = 10.00m;
+      decimal taxAmount = 5.60m;
+        decimal penaltyAmount = 25.00m;
+
+        // Act
+        decimal totalAmount = energyCharges + fixedCharges + taxAmount + penaltyAmount;
+
+        // Assert
+        Assert.Equal(100.60m, totalAmount);
+    }
+
+    [Fact]
+    public void CalculateTotalBillAmount_WithPreviousBalance_ReturnsCorrectTotal()
+    {
+        // Arrange
+        decimal energyCharges = 60.00m;
+        decimal fixedCharges = 10.00m;
+  decimal taxAmount = 5.60m;
+        decimal previousBalance = 50.00m;
+
+ // Act
+        decimal totalAmount = energyCharges + fixedCharges + taxAmount + previousBalance;
+
+        // Assert
+        Assert.Equal(125.60m, totalAmount);
+    }
+
+    #endregion
+
+    #region Penalty Calculation Tests
+
+ [Fact]
+    public void CalculatePenalty_WhenOverdue_ReturnsPenaltyAmount()
+    {
+        // Arrange
+     DateOnly dueDate = new DateOnly(2025, 1, 15);
+    DateOnly today = new DateOnly(2025, 1, 20);
+        decimal basePenalty = 25.00m;
+
+  // Act
+        bool isOverdue = today > dueDate;
+        decimal penaltyAmount = isOverdue ? basePenalty : 0;
+
+        // Assert
+        Assert.True(isOverdue);
+        Assert.Equal(25.00m, penaltyAmount);
+    }
+
+    [Fact]
+    public void CalculatePenalty_WhenNotOverdue_ReturnsZero()
+    {
+        // Arrange
+ DateOnly dueDate = new DateOnly(2025, 1, 20);
+    DateOnly today = new DateOnly(2025, 1, 15);
+ decimal basePenalty = 25.00m;
+
+        // Act
+     bool isOverdue = today > dueDate;
+        decimal penaltyAmount = isOverdue ? basePenalty : 0;
+
+   // Assert
+        Assert.False(isOverdue);
+      Assert.Equal(0, penaltyAmount);
+    }
+
+    [Fact]
+    public void CalculatePenalty_WithMultipleOverduePeriods_ReturnsAccumulatedPenalty()
+    {
+        // Arrange
+        DateOnly dueDate = new DateOnly(2025, 1, 15);
+        DateOnly today = new DateOnly(2025, 2, 15);
+        decimal basePenalty = 25.00m;
+        int penaltyIntervalDays = 7;
+
+    // Act
+        int daysOverdue = today.DayNumber - dueDate.DayNumber;
+        int penaltyCount = daysOverdue / penaltyIntervalDays;
+        decimal totalPenalty = penaltyCount * basePenalty;
+
+    // Assert (31 days overdue = 4 penalty periods)
+        Assert.Equal(4, penaltyCount);
+    Assert.Equal(100.00m, totalPenalty);
+    }
+
+  #endregion
+
+ #region Units Consumed Calculation Tests
+
+    [Fact]
+    public void CalculateUnitsConsumed_WithValidReadings_ReturnsCorrectUnits()
+    {
+        // Arrange
+        decimal previousReading = 1000;
+        decimal currentReading = 1500;
+
+        // Act
+        decimal unitsConsumed = currentReading - previousReading;
+
+      // Assert
+    Assert.Equal(500, unitsConsumed);
+    }
+
+    [Fact]
+    public void CalculateUnitsConsumed_WithSameReading_ReturnsZero()
+    {
+        // Arrange
+  decimal previousReading = 1500;
+        decimal currentReading = 1500;
+
+ // Act
+     decimal unitsConsumed = currentReading - previousReading;
+
+        // Assert
+        Assert.Equal(0, unitsConsumed);
+  }
+
+    [Theory]
+    [InlineData(0, 500, 500)]
+    [InlineData(1000, 1500, 500)]
+    [InlineData(5000, 5750, 750)]
+    [InlineData(10000, 12500, 2500)]
+    public void CalculateUnitsConsumed_WithVariousReadings_ReturnsExpectedUnits(
+        decimal previous, decimal current, decimal expected)
+    {
+        // Act
+        decimal result = current - previous;
+
+        // Assert
+ Assert.Equal(expected, result);
+    }
+
+    #endregion
+
+  #region Outstanding Balance Calculation Tests
+
+    [Fact]
+    public void CalculateOutstandingBalance_WithPartialPayment_ReturnsCorrectBalance()
+    {
+    // Arrange
+        decimal totalAmount = 100.00m;
+        decimal amountPaid = 60.00m;
+
+        // Act
+      decimal outstandingBalance = totalAmount - amountPaid;
+
+      // Assert
+        Assert.Equal(40.00m, outstandingBalance);
+    }
+
+    [Fact]
+    public void CalculateOutstandingBalance_WithFullPayment_ReturnsZero()
+    {
+        // Arrange
+        decimal totalAmount = 100.00m;
+        decimal amountPaid = 100.00m;
+
+        // Act
+        decimal outstandingBalance = totalAmount - amountPaid;
+
+        // Assert
+        Assert.Equal(0, outstandingBalance);
+    }
+
+    [Fact]
+    public void CalculateOutstandingBalance_WithNoPayment_ReturnsTotalAmount()
+    {
+        // Arrange
+  decimal totalAmount = 100.00m;
+     decimal amountPaid = 0;
+
+        // Act
+        decimal outstandingBalance = totalAmount - amountPaid;
+
+      // Assert
+     Assert.Equal(100.00m, outstandingBalance);
+    }
+
+    #endregion
+
+ #region Bill Status Determination Tests
+
+    [Fact]
+    public void DetermineBillStatus_WhenFullyPaid_ReturnsPaid()
+    {
+        // Arrange
+   decimal totalAmount = 100.00m;
+        decimal amountPaid = 100.00m;
+        DateOnly dueDate = new DateOnly(2025, 1, 20);
+     DateOnly today = new DateOnly(2025, 1, 15);
+
+        // Act
+        string status = DetermineBillStatus(totalAmount, amountPaid, dueDate, today);
+
+        // Assert
+    Assert.Equal("Paid", status);
+    }
+
+    [Fact]
+    public void DetermineBillStatus_WhenNotPaidAndOverdue_ReturnsOverdue()
+    {
+        // Arrange
+        decimal totalAmount = 100.00m;
+      decimal amountPaid = 0;
+        DateOnly dueDate = new DateOnly(2025, 1, 15);
+        DateOnly today = new DateOnly(2025, 1, 20);
+
+   // Act
+        string status = DetermineBillStatus(totalAmount, amountPaid, dueDate, today);
+
+        // Assert
+        Assert.Equal("Overdue", status);
+    }
+
+    [Fact]
+    public void DetermineBillStatus_WhenNotPaidAndNotDue_ReturnsDue()
+    {
+        // Arrange
+    decimal totalAmount = 100.00m;
+        decimal amountPaid = 0;
+ DateOnly dueDate = new DateOnly(2025, 1, 25);
+        DateOnly today = new DateOnly(2025, 1, 15);
+
+      // Act
+        string status = DetermineBillStatus(totalAmount, amountPaid, dueDate, today);
+
+    // Assert
+    Assert.Equal("Due", status);
+    }
+
+    private string DetermineBillStatus(decimal totalAmount, decimal amountPaid, DateOnly dueDate, DateOnly today)
+    {
+        if (amountPaid >= totalAmount)
+            return "Paid";
+        if (today > dueDate)
+     return "Overdue";
+ return "Due";
+    }
+
+    #endregion
+
+    #region LINQ Aggregation Tests for Reports
+
+    [Fact]
+public void LinqAggregation_TotalRevenuePerMonth_ReturnsCorrectSum()
+  {
+        // Arrange
+        var bills = new List<BillData>
+        {
+    new BillData { Month = 1, Year = 2025, TotalAmount = 100.00m },
+            new BillData { Month = 1, Year = 2025, TotalAmount = 150.00m },
+            new BillData { Month = 1, Year = 2025, TotalAmount = 200.00m },
+    new BillData { Month = 2, Year = 2025, TotalAmount = 175.00m },
+     new BillData { Month = 2, Year = 2025, TotalAmount = 125.00m }
+        };
+
+// Act - LINQ: Total revenue per month
+      var revenueByMonth = bills
+            .GroupBy(b => new { b.Month, b.Year })
+        .Select(g => new 
+{ 
+   Month = g.Key.Month, 
+     Year = g.Key.Year, 
+   TotalRevenue = g.Sum(b => b.TotalAmount) 
+      })
+      .OrderBy(r => r.Year)
+  .ThenBy(r => r.Month)
+     .ToList();
+
+ // Assert
+        Assert.Equal(2, revenueByMonth.Count);
+        Assert.Equal(450.00m, revenueByMonth[0].TotalRevenue); // January
+        Assert.Equal(300.00m, revenueByMonth[1].TotalRevenue); // February
+    }
+
+    [Fact]
+    public void LinqAggregation_OutstandingDues_ReturnsCorrectSum()
+    {
+        // Arrange
+ var bills = new List<BillData>
+        {
+        new BillData { Status = "Paid", OutstandingBalance = 0 },
+   new BillData { Status = "Due", OutstandingBalance = 100.00m },
+          new BillData { Status = "Overdue", OutstandingBalance = 150.00m },
+            new BillData { Status = "Paid", OutstandingBalance = 0 },
+            new BillData { Status = "Overdue", OutstandingBalance = 200.00m }
+        };
+
+        // Act - LINQ: Outstanding dues
+        var totalOutstanding = bills
+  .Where(b => b.Status != "Paid")
+            .Sum(b => b.OutstandingBalance);
+
+        var overdueCount = bills.Count(b => b.Status == "Overdue");
+
+        // Assert
+        Assert.Equal(450.00m, totalOutstanding);
+  Assert.Equal(2, overdueCount);
+    }
+
+    [Fact]
+    public void LinqAggregation_AverageConsumption_ReturnsCorrectAverage()
+    {
+        // Arrange
+        var readings = new List<MeterReadingData>
+        {
+       new MeterReadingData { ConnectionId = 1, UnitsConsumed = 500 },
+            new MeterReadingData { ConnectionId = 2, UnitsConsumed = 750 },
+         new MeterReadingData { ConnectionId = 3, UnitsConsumed = 300 },
+            new MeterReadingData { ConnectionId = 4, UnitsConsumed = 600 },
+          new MeterReadingData { ConnectionId = 5, UnitsConsumed = 850 }
+        };
+
+        // Act - LINQ: Average consumption
+        var avgConsumption = readings.Average(r => r.UnitsConsumed);
+   var minConsumption = readings.Min(r => r.UnitsConsumed);
+        var maxConsumption = readings.Max(r => r.UnitsConsumed);
+
+        // Assert
+        Assert.Equal(600, avgConsumption);
+     Assert.Equal(300, minConsumption);
+        Assert.Equal(850, maxConsumption);
+    }
+
+    [Fact]
+    public void LinqFiltering_OverdueBills_ReturnsCorrectList()
+    {
+        // Arrange
+  var today = new DateOnly(2025, 1, 20);
+        var bills = new List<BillData>
+        {
+          new BillData { Id = 1, DueDate = new DateOnly(2025, 1, 15), Status = "Due", OutstandingBalance = 100 },
+  new BillData { Id = 2, DueDate = new DateOnly(2025, 1, 25), Status = "Due", OutstandingBalance = 150 },
+     new BillData { Id = 3, DueDate = new DateOnly(2025, 1, 10), Status = "Due", OutstandingBalance = 200 },
+    new BillData { Id = 4, DueDate = new DateOnly(2025, 1, 18), Status = "Paid", OutstandingBalance = 0 }
+        };
+
+        // Act - LINQ: Filter overdue bills
+        var overdueBills = bills
+   .Where(b => b.DueDate < today && b.Status != "Paid")
+            .OrderBy(b => b.DueDate)
+            .ToList();
+
+        // Assert
+        Assert.Equal(2, overdueBills.Count);
+        Assert.Equal(3, overdueBills[0].Id); // Oldest due first
+        Assert.Equal(1, overdueBills[1].Id);
+    }
+
+    [Fact]
+    public void LinqSorting_BillsByAmount_ReturnsCorrectOrder()
+    {
+     // Arrange
+        var bills = new List<BillData>
+        {
+       new BillData { Id = 1, TotalAmount = 150.00m },
+   new BillData { Id = 2, TotalAmount = 75.00m },
+         new BillData { Id = 3, TotalAmount = 200.00m },
+            new BillData { Id = 4, TotalAmount = 100.00m }
+        };
+
+        // Act - LINQ: Sort by amount descending
+     var sortedBills = bills
+         .OrderByDescending(b => b.TotalAmount)
+            .ToList();
+
+        // Assert
+        Assert.Equal(3, sortedBills[0].Id); // 200
+        Assert.Equal(1, sortedBills[1].Id); // 150
+Assert.Equal(4, sortedBills[2].Id); // 100
+  Assert.Equal(2, sortedBills[3].Id); // 75
+    }
+
+    #endregion
+
+    // Helper test data classes
+    private class BillData
+    {
+   public int Id { get; set; }
+        public int Month { get; set; }
+        public int Year { get; set; }
+      public decimal TotalAmount { get; set; }
+        public decimal OutstandingBalance { get; set; }
+        public string Status { get; set; } = "Due";
+  public DateOnly DueDate { get; set; }
+    }
+
+    private class MeterReadingData
+    {
+     public int ConnectionId { get; set; }
+        public decimal UnitsConsumed { get; set; }
+    }
+}

@@ -1,0 +1,199 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using System.Security.Claims;
+using UtilityManagmentApi.Controllers;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.MeterReading;
+using UtilityManagmentApi.Services.Interfaces;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Controllers;
+
+/// <summary>
+/// Unit tests for MeterReadingsController - Tests meter reading entry endpoints
+/// </summary>
+public class MeterReadingsControllerTests
+{
+    private readonly Mock<IMeterReadingService> _mockMeterReadingService;
+    private readonly MeterReadingsController _controller;
+
+    public MeterReadingsControllerTests()
+    {
+        _mockMeterReadingService = new Mock<IMeterReadingService>();
+        _controller = new MeterReadingsController(_mockMeterReadingService.Object);
+    }
+
+    private void SetupUserClaims(int userId, string role)
+    {
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Role, role)
+        };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var claimsPrincipal = new ClaimsPrincipal(identity);
+
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = claimsPrincipal }
+        };
+    }
+
+    #region GetAll Tests
+
+    [Fact]
+    public async Task GetAll_ReturnsOkResult_WithReadingsList()
+    {
+        // Arrange
+        var paginationParams = new PaginationParams { PageNumber = 1, PageSize = 10 };
+        var readings = new List<MeterReadingListDto>
+        {
+            new MeterReadingListDto { Id = 1, UnitsConsumed = 500 },
+            new MeterReadingListDto { Id = 2, UnitsConsumed = 750 }
+        };
+
+        var pagedResponse = new PagedResponse<MeterReadingListDto> { Data = readings, TotalRecords = 2 };
+
+        _mockMeterReadingService.Setup(s => s.GetAllAsync(paginationParams, null, null))
+            .ReturnsAsync(pagedResponse);
+
+        // Act
+        var result = await _controller.GetAll(paginationParams, null, null);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<PagedResponse<MeterReadingListDto>>(okResult.Value);
+        Assert.Equal(2, response.Data.Count);
+    }
+
+    #endregion
+
+    #region GetById Tests
+
+    [Fact]
+    public async Task GetById_WithValidId_ReturnsOkResult()
+    {
+        // Arrange
+        var readingDto = new MeterReadingDto
+        {
+            Id = 1,
+            CurrentReading = 1500,
+            PreviousReading = 1000,
+            UnitsConsumed = 500
+        };
+
+        _mockMeterReadingService.Setup(s => s.GetByIdAsync(1))
+            .ReturnsAsync(ApiResponse<MeterReadingDto>.SuccessResponse(readingDto));
+
+        // Act
+        var result = await _controller.GetById(1);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<MeterReadingDto>>(okResult.Value);
+        Assert.Equal(500, response.Data?.UnitsConsumed);
+    }
+
+    [Fact]
+    public async Task GetById_WithInvalidId_ReturnsNotFound()
+    {
+        // Arrange
+        _mockMeterReadingService.Setup(s => s.GetByIdAsync(999))
+            .ReturnsAsync(ApiResponse<MeterReadingDto>.ErrorResponse("Meter reading not found"));
+
+        // Act
+        var result = await _controller.GetById(999);
+
+        // Assert
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    #endregion
+
+    #region Create Tests
+
+    [Fact]
+    public async Task Create_WithValidData_ReturnsCreatedResult()
+    {
+        // Arrange
+        SetupUserClaims(2, "BillingOfficer");
+        var createDto = new CreateMeterReadingDto
+        {
+            ConnectionId = 1,
+            CurrentReading = 2000,
+            BillingMonth = 2,
+            BillingYear = 2025
+        };
+
+        var readingDto = new MeterReadingDto
+        {
+            Id = 1,
+            PreviousReading = 1500,
+            CurrentReading = 2000,
+            UnitsConsumed = 500
+        };
+
+        _mockMeterReadingService.Setup(s => s.CreateAsync(createDto, 2))
+            .ReturnsAsync(ApiResponse<MeterReadingDto>.SuccessResponse(readingDto));
+
+        // Act
+        var result = await _controller.Create(createDto);
+
+        // Assert
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
+        var response = Assert.IsType<ApiResponse<MeterReadingDto>>(createdResult.Value);
+        Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task Create_WithInvalidReading_ReturnsBadRequest()
+    {
+        // Arrange
+        SetupUserClaims(2, "BillingOfficer");
+        var createDto = new CreateMeterReadingDto
+        {
+            ConnectionId = 1,
+            CurrentReading = 1000, // Less than previous
+            BillingMonth = 2,
+            BillingYear = 2025
+        };
+
+        _mockMeterReadingService.Setup(s => s.CreateAsync(createDto, 2))
+            .ReturnsAsync(ApiResponse<MeterReadingDto>.ErrorResponse("Current reading must be greater than previous reading"));
+
+        // Act
+        var result = await _controller.Create(createDto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    #endregion
+
+    #region GetUnbilledReadings Tests
+
+    [Fact]
+    public async Task GetUnbilledReadings_ReturnsOkResult()
+    {
+        // Arrange
+        var unbilledReadings = new List<MeterReadingListDto>
+        {
+            new MeterReadingListDto { Id = 1, IsBilled = false },
+            new MeterReadingListDto { Id = 2, IsBilled = false }
+        };
+
+        _mockMeterReadingService.Setup(s => s.GetUnbilledReadingsAsync(null, null))
+            .ReturnsAsync(ApiResponse<List<MeterReadingListDto>>.SuccessResponse(unbilledReadings));
+
+        // Act
+        var result = await _controller.GetUnbilledReadings(null, null);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<List<MeterReadingListDto>>>(okResult.Value);
+        Assert.Equal(2, response.Data?.Count);
+    }
+
+    #endregion
+}

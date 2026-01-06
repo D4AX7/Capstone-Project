@@ -1,0 +1,558 @@
+﻿using System.Globalization;
+using Microsoft.EntityFrameworkCore;
+using UtilityManagmentApi.Data;
+using UtilityManagmentApi.DTOs.Bill;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.Entities;
+using UtilityManagmentApi.Services.Interfaces;
+
+namespace UtilityManagmentApi.Services.Implementations;
+
+public class BillService : IBillService
+{
+ private readonly ApplicationDbContext _context;
+    private readonly INotificationService _notificationService;
+
+    public BillService(ApplicationDbContext context, INotificationService notificationService)
+    {
+ _context = context;
+        _notificationService = notificationService;
+    }
+
+    public async Task<ApiResponse<BillDto>> GetByIdAsync(int id)
+    {
+        var bill = await GetBillWithDetailsAsync(id);
+      if (bill == null)
+  {
+         return ApiResponse<BillDto>.ErrorResponse("Bill not found");
+        }
+
+        return ApiResponse<BillDto>.SuccessResponse(MapToDto(bill));
+    }
+
+    public async Task<ApiResponse<BillDto>> GetByBillNumberAsync(string billNumber)
+    {
+        var bill = await _context.Bills
+ .Include(b => b.Connection)
+.ThenInclude(c => c.Consumer)
+  .ThenInclude(co => co.User)
+        .Include(b => b.Connection)
+      .ThenInclude(c => c.UtilityType)
+        .Include(b => b.Connection)
+       .ThenInclude(c => c.TariffPlan)
+      .Include(b => b.Payments)
+    .Include(b => b.GeneratedByUser)
+     .FirstOrDefaultAsync(b => b.BillNumber == billNumber);
+
+        if (bill == null)
+        {
+            return ApiResponse<BillDto>.ErrorResponse("Bill not found");
+   }
+
+        return ApiResponse<BillDto>.SuccessResponse(MapToDto(bill));
+    }
+
+    public async Task<ApiResponse<List<BillDto>>> GetByConnectionIdAsync(int connectionId)
+    {
+  var bills = await _context.Bills
+    .Include(b => b.Connection)
+  .ThenInclude(c => c.Consumer)
+.ThenInclude(co => co.User)
+    .Include(b => b.Connection)
+      .ThenInclude(c => c.UtilityType)
+   .Include(b => b.Connection)
+        .ThenInclude(c => c.TariffPlan)
+            .Include(b => b.Payments)
+      .Where(b => b.ConnectionId == connectionId)
+      .OrderByDescending(b => b.BillingYear)
+     .ThenByDescending(b => b.BillingMonth)
+   .ToListAsync();
+
+ return ApiResponse<List<BillDto>>.SuccessResponse(bills.Select(MapToDto).ToList());
+    }
+
+    public async Task<ApiResponse<List<BillDto>>> GetByConsumerIdAsync(int consumerId)
+ {
+        var bills = await _context.Bills
+            .Include(b => b.Connection)
+    .ThenInclude(c => c.Consumer)
+   .ThenInclude(co => co.User)
+.Include(b => b.Connection)
+      .ThenInclude(c => c.UtilityType)
+   .Include(b => b.Connection)
+      .ThenInclude(c => c.TariffPlan)
+  .Include(b => b.Payments)
+       .Where(b => b.Connection.ConsumerId == consumerId)
+       .OrderByDescending(b => b.BillingYear)
+.ThenByDescending(b => b.BillingMonth)
+ .ToListAsync();
+
+  return ApiResponse<List<BillDto>>.SuccessResponse(bills.Select(MapToDto).ToList());
+    }
+
+ public async Task<PagedResponse<BillListDto>> GetAllAsync(PaginationParams paginationParams, string? status = null, int? billingMonth = null, int? billingYear = null)
+    {
+        var query = _context.Bills
+            .Include(b => b.Connection)
+       .ThenInclude(c => c.Consumer)
+.ThenInclude(co => co.User)
+    .Include(b => b.Connection)
+    .ThenInclude(c => c.UtilityType)
+.AsQueryable();
+
+        if (!string.IsNullOrEmpty(status) && Enum.TryParse<BillStatus>(status, true, out var statusEnum))
+    {
+            query = query.Where(b => b.Status == statusEnum);
+        }
+
+        if (billingMonth.HasValue)
+        {
+            query = query.Where(b => b.BillingMonth == billingMonth.Value);
+        }
+
+        if (billingYear.HasValue)
+      {
+  query = query.Where(b => b.BillingYear == billingYear.Value);
+        }
+
+        if (!string.IsNullOrEmpty(paginationParams.SearchTerm))
+        {
+       var searchTerm = paginationParams.SearchTerm.ToLower();
+         query = query.Where(b =>
+      b.BillNumber.ToLower().Contains(searchTerm) ||
+  b.Connection.Consumer.ConsumerNumber.ToLower().Contains(searchTerm) ||
+    b.Connection.Consumer.User.FirstName.ToLower().Contains(searchTerm) ||
+                b.Connection.Consumer.User.LastName.ToLower().Contains(searchTerm));
+        }
+
+        var totalRecords = await query.CountAsync();
+     var totalPages = (int)Math.Ceiling(totalRecords / (double)paginationParams.PageSize);
+
+        var bills = await query
+       .OrderByDescending(b => b.BillingYear)
+         .ThenByDescending(b => b.BillingMonth)
+   .ThenByDescending(b => b.CreatedAt)
+  .Skip((paginationParams.PageNumber - 1) * paginationParams.PageSize)
+     .Take(paginationParams.PageSize)
+            .Select(b => new BillListDto
+      {
+       Id = b.Id,
+   BillNumber = b.BillNumber,
+           ConsumerName = $"{b.Connection.Consumer.User.FirstName} {b.Connection.Consumer.User.LastName}",
+      ConsumerNumber = b.Connection.Consumer.ConsumerNumber,
+     UtilityType = b.Connection.UtilityType.Name,
+    BillingPeriod = $"{CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(b.BillingMonth)} {b.BillingYear}",
+    DueDate = b.DueDate,
+         TotalAmount = b.TotalAmount,
+        OutstandingBalance = b.OutstandingBalance,
+      Status = b.Status.ToString()
+       })
+    .ToListAsync();
+
+        return new PagedResponse<BillListDto>
+        {
+    Data = bills,
+   PageNumber = paginationParams.PageNumber,
+            PageSize = paginationParams.PageSize,
+    TotalPages = totalPages,
+     TotalRecords = totalRecords
+        };
+    }
+
+    public async Task<ApiResponse<BillDto>> GenerateBillAsync(GenerateBillDto dto, int userId)
+    {
+  var connection = await _context.Connections
+            .Include(c => c.Consumer)
+   .ThenInclude(co => co.User)
+            .Include(c => c.UtilityType)
+     .Include(c => c.TariffPlan)
+            .FirstOrDefaultAsync(c => c.Id == dto.ConnectionId);
+
+      if (connection == null)
+        {
+     return ApiResponse<BillDto>.ErrorResponse("Connection not found");
+      }
+
+        if (connection.Status != ConnectionStatus.Active)
+        {
+            return ApiResponse<BillDto>.ErrorResponse("Connection is not active");
+        }
+
+   // Check if bill already exists
+    if (await _context.Bills.AnyAsync(b =>
+            b.ConnectionId == dto.ConnectionId &&
+    b.BillingMonth == dto.BillingMonth &&
+b.BillingYear == dto.BillingYear))
+        {
+      return ApiResponse<BillDto>.ErrorResponse("Bill already exists for this billing period");
+        }
+
+        // Get meter reading
+        MeterReading? meterReading = null;
+        if (dto.MeterReadingId.HasValue)
+        {
+meterReading = await _context.MeterReadings.FindAsync(dto.MeterReadingId.Value);
+        }
+     else
+        {
+     meterReading = await _context.MeterReadings
+        .FirstOrDefaultAsync(m =>
+          m.ConnectionId == dto.ConnectionId &&
+      m.BillingMonth == dto.BillingMonth &&
+             m.BillingYear == dto.BillingYear);
+        }
+
+      if (meterReading == null)
+        {
+     return ApiResponse<BillDto>.ErrorResponse("Meter reading not found for this billing period");
+        }
+
+    // Get previous balance
+        var previousBalance = await GetPreviousBalanceAsync(dto.ConnectionId);
+
+        // Calculate bill
+        var tariff = connection.TariffPlan;
+        var energyCharges = meterReading.UnitsConsumed * tariff.RatePerUnit;
+        var fixedCharges = tariff.FixedCharges;
+        var subtotal = energyCharges + fixedCharges;
+    var taxAmount = subtotal * (tariff.TaxPercentage / 100);
+  var totalAmount = subtotal + taxAmount + previousBalance;
+
+      var billNumber = await GenerateBillNumberAsync();
+
+        var bill = new Bill
+    {
+     BillNumber = billNumber,
+     ConnectionId = dto.ConnectionId,
+   MeterReadingId = meterReading.Id,
+     BillingMonth = dto.BillingMonth,
+            BillingYear = dto.BillingYear,
+            BillDate = DateTime.UtcNow,
+            DueDate = dto.DueDate ?? DateTime.UtcNow.AddDays(15),
+   PreviousReading = meterReading.PreviousReading,
+          CurrentReading = meterReading.CurrentReading,
+ UnitsConsumed = meterReading.UnitsConsumed,
+         RatePerUnit = tariff.RatePerUnit,
+            EnergyCharges = energyCharges,
+            FixedCharges = fixedCharges,
+         TaxAmount = taxAmount,
+   PenaltyAmount = 0,
+            PreviousBalance = previousBalance,
+      TotalAmount = totalAmount,
+    AmountPaid = 0,
+         OutstandingBalance = totalAmount,
+        Status = BillStatus.Generated,
+     GeneratedByUserId = userId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+      _context.Bills.Add(bill);
+        await _context.SaveChangesAsync();
+
+    // Send notification to consumer
+  await _notificationService.CreateBillGeneratedNotificationAsync(
+     connection.Consumer.UserId,
+        bill.Id,
+            bill.BillNumber,
+      bill.TotalAmount);
+
+        bill.Connection = connection;
+        bill.GeneratedByUser = await _context.Users.FindAsync(userId);
+
+        return ApiResponse<BillDto>.SuccessResponse(MapToDto(bill), "Bill generated successfully");
+    }
+
+ public async Task<ApiResponse<List<BillDto>>> GenerateBulkBillsAsync(GenerateBulkBillsDto dto, int userId)
+    {
+        var generatedBills = new List<BillDto>();
+        var errors = new List<string>();
+
+        List<int> connectionIds;
+        if (dto.ConnectionIds != null && dto.ConnectionIds.Any())
+   {
+            connectionIds = dto.ConnectionIds;
+ }
+        else
+    {
+            // Get all connections with unbilled readings for the period
+          var billedConnections = await _context.Bills
+     .Where(b => b.BillingMonth == dto.BillingMonth && b.BillingYear == dto.BillingYear)
+                .Select(b => b.ConnectionId)
+     .ToListAsync();
+
+            connectionIds = await _context.MeterReadings
+        .Where(m => m.BillingMonth == dto.BillingMonth &&
+          m.BillingYear == dto.BillingYear &&
+    !billedConnections.Contains(m.ConnectionId))
+       .Select(m => m.ConnectionId)
+          .Distinct()
+           .ToListAsync();
+     }
+
+    foreach (var connectionId in connectionIds)
+        {
+            var generateDto = new GenerateBillDto
+       {
+ConnectionId = connectionId,
+          BillingMonth = dto.BillingMonth,
+            BillingYear = dto.BillingYear
+            };
+
+            var result = await GenerateBillAsync(generateDto, userId);
+          if (result.Success && result.Data != null)
+            {
+         generatedBills.Add(result.Data);
+   }
+         else
+        {
+     errors.Add($"Connection {connectionId}: {result.Message}");
+            }
+        }
+
+        if (errors.Any())
+        {
+            return ApiResponse<List<BillDto>>.ErrorResponse(
+  $"Generated {generatedBills.Count} bills with {errors.Count} errors",
+        errors);
+        }
+
+        return ApiResponse<List<BillDto>>.SuccessResponse(generatedBills, $"Generated {generatedBills.Count} bills successfully");
+    }
+
+    public async Task<ApiResponse<BillDto>> UpdateStatusAsync(int id, UpdateBillStatusDto dto)
+    {
+        var bill = await GetBillWithDetailsAsync(id);
+        if (bill == null)
+      {
+    return ApiResponse<BillDto>.ErrorResponse("Bill not found");
+        }
+
+        if (!Enum.TryParse<BillStatus>(dto.Status, true, out var status))
+  {
+      return ApiResponse<BillDto>.ErrorResponse("Invalid status");
+        }
+
+        bill.Status = status;
+        bill.UpdatedAt = DateTime.UtcNow;
+
+    await _context.SaveChangesAsync();
+
+        return ApiResponse<BillDto>.SuccessResponse(MapToDto(bill), "Bill status updated successfully");
+    }
+
+    public async Task<ApiResponse<bool>> DeleteAsync(int id)
+    {
+        var bill = await _context.Bills
+            .Include(b => b.Payments)
+         .FirstOrDefaultAsync(b => b.Id == id);
+
+        if (bill == null)
+        {
+            return ApiResponse<bool>.ErrorResponse("Bill not found");
+   }
+
+        if (bill.Payments.Any())
+        {
+          return ApiResponse<bool>.ErrorResponse("Cannot delete bill with payments");
+        }
+
+        bill.Status = BillStatus.Cancelled;
+        bill.UpdatedAt = DateTime.UtcNow;
+
+    await _context.SaveChangesAsync();
+
+  return ApiResponse<bool>.SuccessResponse(true, "Bill cancelled successfully");
+    }
+
+    public async Task<ApiResponse<BillSummaryDto>> GetSummaryAsync(int? billingMonth = null, int? billingYear = null)
+    {
+        var query = _context.Bills.Where(b => b.Status != BillStatus.Cancelled);
+
+        if (billingMonth.HasValue)
+        {
+         query = query.Where(b => b.BillingMonth == billingMonth.Value);
+        }
+
+        if (billingYear.HasValue)
+   {
+       query = query.Where(b => b.BillingYear == billingYear.Value);
+        }
+
+     var summary = await query
+      .GroupBy(b => 1)
+            .Select(g => new BillSummaryDto
+  {
+      TotalBills = g.Count(),
+     TotalBilledAmount = g.Sum(b => b.TotalAmount),
+                TotalCollected = g.Sum(b => b.AmountPaid),
+     TotalOutstanding = g.Sum(b => b.OutstandingBalance),
+    PaidBills = g.Count(b => b.Status == BillStatus.Paid),
+                OverdueBills = g.Count(b => b.Status == BillStatus.Overdue)
+        })
+ .FirstOrDefaultAsync();
+
+        return ApiResponse<BillSummaryDto>.SuccessResponse(summary ?? new BillSummaryDto());
+    }
+
+    public async Task<ApiResponse<List<BillListDto>>> GetOverdueBillsAsync()
+    {
+        var today = DateTime.UtcNow.Date;
+
+ var bills = await _context.Bills
+   .Include(b => b.Connection)
+    .ThenInclude(c => c.Consumer)
+            .ThenInclude(co => co.User)
+   .Include(b => b.Connection)
+    .ThenInclude(c => c.UtilityType)
+       .Where(b => b.DueDate < today &&
+                 b.OutstandingBalance > 0 &&
+            b.Status != BillStatus.Paid &&
+ b.Status != BillStatus.Cancelled)
+       .OrderBy(b => b.DueDate)
+ .Select(b => new BillListDto
+      {
+ Id = b.Id,
+  BillNumber = b.BillNumber,
+       ConsumerName = $"{b.Connection.Consumer.User.FirstName} {b.Connection.Consumer.User.LastName}",
+    ConsumerNumber = b.Connection.Consumer.ConsumerNumber,
+        UtilityType = b.Connection.UtilityType.Name,
+  BillingPeriod = $"{CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(b.BillingMonth)} {b.BillingYear}",
+     DueDate = b.DueDate,
+ TotalAmount = b.TotalAmount,
+   OutstandingBalance = b.OutstandingBalance,
+  Status = b.Status.ToString()
+            })
+            .ToListAsync();
+
+        return ApiResponse<List<BillListDto>>.SuccessResponse(bills);
+    }
+
+    public async Task UpdateOverdueBillsAsync()
+    {
+     var today = DateTime.UtcNow.Date;
+
+        var overdueBills = await _context.Bills
+            .Where(b => b.DueDate < today &&
+           b.OutstandingBalance > 0 &&
+  b.Status != BillStatus.Paid &&
+     b.Status != BillStatus.Cancelled &&
+      b.Status != BillStatus.Overdue)
+    .ToListAsync();
+
+        foreach (var bill in overdueBills)
+     {
+ bill.Status = BillStatus.Overdue;
+
+            // Apply late payment penalty
+            var connection = await _context.Connections
+  .Include(c => c.TariffPlan)
+        .FirstOrDefaultAsync(c => c.Id == bill.ConnectionId);
+
+            if (connection != null && bill.PenaltyAmount == 0)
+        {
+    bill.PenaltyAmount = connection.TariffPlan.LatePaymentPenalty;
+   bill.TotalAmount += bill.PenaltyAmount;
+  bill.OutstandingBalance += bill.PenaltyAmount;
+       }
+
+            bill.UpdatedAt = DateTime.UtcNow;
+        }
+
+    await _context.SaveChangesAsync();
+    }
+
+    private async Task<Bill?> GetBillWithDetailsAsync(int id)
+  {
+        return await _context.Bills
+         .Include(b => b.Connection)
+            .ThenInclude(c => c.Consumer)
+       .ThenInclude(co => co.User)
+            .Include(b => b.Connection)
+          .ThenInclude(c => c.UtilityType)
+     .Include(b => b.Connection)
+      .ThenInclude(c => c.TariffPlan)
+.Include(b => b.Payments)
+ .Include(b => b.GeneratedByUser)
+ .FirstOrDefaultAsync(b => b.Id == id);
+    }
+
+    private async Task<decimal> GetPreviousBalanceAsync(int connectionId)
+    {
+        var lastBill = await _context.Bills
+  .Where(b => b.ConnectionId == connectionId && b.Status != BillStatus.Cancelled)
+       .OrderByDescending(b => b.BillingYear)
+            .ThenByDescending(b => b.BillingMonth)
+       .FirstOrDefaultAsync();
+
+    return lastBill?.OutstandingBalance ?? 0;
+    }
+
+    private async Task<string> GenerateBillNumberAsync()
+    {
+      var year = DateTime.UtcNow.Year.ToString()[2..];
+        var month = DateTime.UtcNow.Month.ToString("D2");
+
+        var lastBill = await _context.Bills
+            .Where(b => b.BillNumber.StartsWith($"BILL{year}{month}"))
+            .OrderByDescending(b => b.BillNumber)
+      .FirstOrDefaultAsync();
+
+        int nextNumber = 1;
+ if (lastBill != null)
+      {
+       var lastNumber = lastBill.BillNumber[8..];
+     if (int.TryParse(lastNumber, out int num))
+        {
+      nextNumber = num + 1;
+            }
+        }
+
+        return $"BILL{year}{month}{nextNumber:D6}";
+  }
+
+    private static BillDto MapToDto(Bill bill)
+    {
+     return new BillDto
+    {
+            Id = bill.Id,
+       BillNumber = bill.BillNumber,
+          ConnectionId = bill.ConnectionId,
+         ConnectionNumber = bill.Connection.ConnectionNumber,
+MeterNumber = bill.Connection.MeterNumber,
+  ConsumerName = $"{bill.Connection.Consumer.User.FirstName} {bill.Connection.Consumer.User.LastName}",
+        ConsumerNumber = bill.Connection.Consumer.ConsumerNumber,
+            UtilityType = bill.Connection.UtilityType.Name,
+          TariffPlan = bill.Connection.TariffPlan.Name,
+  BillingMonth = bill.BillingMonth,
+            BillingYear = bill.BillingYear,
+            BillingPeriod = $"{CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(bill.BillingMonth)} {bill.BillingYear}",
+         BillDate = bill.BillDate,
+            DueDate = bill.DueDate,
+            PreviousReading = bill.PreviousReading,
+  CurrentReading = bill.CurrentReading,
+  UnitsConsumed = bill.UnitsConsumed,
+            RatePerUnit = bill.RatePerUnit,
+   EnergyCharges = bill.EnergyCharges,
+  FixedCharges = bill.FixedCharges,
+            TaxAmount = bill.TaxAmount,
+            PenaltyAmount = bill.PenaltyAmount,
+            PreviousBalance = bill.PreviousBalance,
+         TotalAmount = bill.TotalAmount,
+     AmountPaid = bill.AmountPaid,
+     OutstandingBalance = bill.OutstandingBalance,
+       Status = bill.Status.ToString(),
+     GeneratedByUserName = bill.GeneratedByUser != null ?
+            $"{bill.GeneratedByUser.FirstName} {bill.GeneratedByUser.LastName}" : null,
+      CreatedAt = bill.CreatedAt,
+         Payments = bill.Payments?.Select(p => new PaymentSummaryDto
+{
+    Id = p.Id,
+        PaymentNumber = p.PaymentNumber,
+        Amount = p.Amount,
+   PaymentDate = p.PaymentDate,
+  PaymentMethod = p.PaymentMethod.ToString(),
+                Status = p.Status.ToString()
+        }).ToList() ?? new List<PaymentSummaryDto>()
+        };
+    }
+}

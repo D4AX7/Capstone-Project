@@ -1,0 +1,70 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using System.Security.Claims;
+using UtilityManagmentApi.Controllers;
+using UtilityManagmentApi.DTOs.BillingCycle;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.Services.Interfaces;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Controllers;
+
+/// <summary>
+/// Unit tests for BillingCyclesController
+/// </summary>
+public class BillingCyclesControllerTests
+{
+    private readonly Mock<IBillingCycleService> _mockBillingCycleService;
+    private readonly BillingCyclesController _controller;
+
+    public BillingCyclesControllerTests()
+    {
+   _mockBillingCycleService = new Mock<IBillingCycleService>();
+        _controller = new BillingCyclesController(_mockBillingCycleService.Object);
+    }
+
+    private void SetupUserClaims(int userId, string role)
+    {
+        var claims = new List<Claim>
+        {
+     new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+        new Claim(ClaimTypes.Role, role)
+  };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+      _controller.ControllerContext = new ControllerContext
+        {
+ HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+    }
+
+    [Fact]
+    public async Task GetAll_ReturnsOkResult()
+    {
+        // Arrange
+        var cycles = new List<BillingCycleDto> { new BillingCycleDto { Id = 1, Name = "Jan 2025" } };
+        _mockBillingCycleService.Setup(s => s.GetAllAsync(null)).ReturnsAsync(ApiResponse<List<BillingCycleDto>>.SuccessResponse(cycles));
+
+        // Act
+        var result = await _controller.GetAll(null);
+
+  // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Create_WithValidData_ReturnsOkResult()
+    {
+        // Arrange
+        SetupUserClaims(1, "Admin");
+        var createDto = new CreateBillingCycleDto { Month = 1, Year = 2025 };
+        var cycleDto = new BillingCycleDto { Id = 1, Name = "January 2025" };
+        _mockBillingCycleService.Setup(s => s.CreateAsync(createDto, 1)).ReturnsAsync(ApiResponse<BillingCycleDto>.SuccessResponse(cycleDto));
+
+        // Act
+        var result = await _controller.Create(createDto);
+
+        // Assert
+  Assert.IsType<OkObjectResult>(result);
+    }
+}

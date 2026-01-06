@@ -1,0 +1,16 @@
+using UtilityManagmentApi.DTOs.Auth;
+using UtilityManagmentApi.DTOs.Common;
+
+namespace UtilityManagmentApi.Services.Interfaces;
+
+public interface IAuthService
+{
+    Task<ApiResponse<LoginResponseDto>> LoginAsync(LoginRequestDto request);
+    Task<ApiResponse<UserDto>> RegisterAsync(RegisterRequestDto request);
+    Task<ApiResponse<LoginResponseDto>> RegisterConsumerAsync(ConsumerRegisterDto request); // Public consumer registration
+    Task<ApiResponse<bool>> ChangePasswordAsync(int userId, ChangePasswordDto request);
+    Task<ApiResponse<UserDto>> GetUserByIdAsync(int userId);
+    Task<PagedResponse<UserDto>> GetAllUsersAsync(PaginationParams paginationParams);
+    Task<ApiResponse<UserDto>> UpdateUserAsync(int userId, UpdateUserDto request);
+    Task<ApiResponse<bool>> DeleteUserAsync(int userId);
+}

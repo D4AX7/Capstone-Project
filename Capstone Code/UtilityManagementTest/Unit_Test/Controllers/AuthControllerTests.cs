@@ -1,0 +1,329 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using System.Security.Claims;
+using UtilityManagmentApi.Controllers;
+using UtilityManagmentApi.DTOs.Auth;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.Services.Interfaces;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Controllers;
+
+/// <summary>
+/// Unit tests for AuthController - Authentication tests
+/// </summary>
+public class AuthControllerTests
+{
+    private readonly Mock<IAuthService> _mockAuthService;
+    private readonly AuthController _controller;
+
+    public AuthControllerTests()
+    {
+        _mockAuthService = new Mock<IAuthService>();
+        _controller = new AuthController(_mockAuthService.Object);
+    }
+
+    private void SetupUserClaims(int userId, string role)
+    {
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Role, role)
+        };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+        };
+    }
+
+    [Fact]
+    public async Task Login_WithValidCredentials_ReturnsOkResult()
+    {
+        // Arrange
+        var loginRequest = new LoginRequestDto { Email = "admin@test.com", Password = "Admin@123" };
+        var loginResponse = new LoginResponseDto { Token = "valid-token", User = new UserDto { Role = "Admin" } };
+        _mockAuthService.Setup(s => s.LoginAsync(loginRequest))
+   .ReturnsAsync(ApiResponse<LoginResponseDto>.SuccessResponse(loginResponse));
+
+        // Act
+        var result = await _controller.Login(loginRequest);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Login_WithInvalidCredentials_ReturnsUnauthorized()
+    {
+        // Arrange
+        var loginRequest = new LoginRequestDto { Email = "invalid@test.com", Password = "wrong" };
+        _mockAuthService.Setup(s => s.LoginAsync(loginRequest))
+     .ReturnsAsync(ApiResponse<LoginResponseDto>.ErrorResponse("Invalid credentials"));
+
+        // Act
+        var result = await _controller.Login(loginRequest);
+
+        // Assert
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Login_WithInactiveAccount_ReturnsUnauthorized()
+    {
+        // Arrange
+        var loginRequest = new LoginRequestDto { Email = "inactive@test.com", Password = "Test@123" };
+        _mockAuthService.Setup(s => s.LoginAsync(loginRequest))
+       .ReturnsAsync(ApiResponse<LoginResponseDto>.ErrorResponse("Account is deactivated"));
+
+        // Act
+        var result = await _controller.Login(loginRequest);
+
+        // Assert
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task RegisterConsumer_WithValidData_ReturnsOkResult()
+    {
+        // Arrange
+        var registerRequest = new ConsumerRegisterDto
+        {
+            Email = "new@test.com",
+            Password = "Test@123",
+            FirstName = "Test",
+            LastName = "User",
+            Address = "123 Test St",
+            City = "City",
+            State = "State",
+            PostalCode = "12345"
+        };
+        var loginResponse = new LoginResponseDto { Token = "token", User = new UserDto { Role = "Consumer" } };
+        _mockAuthService.Setup(s => s.RegisterConsumerAsync(registerRequest))
+        .ReturnsAsync(ApiResponse<LoginResponseDto>.SuccessResponse(loginResponse));
+
+        // Act
+        var result = await _controller.RegisterConsumer(registerRequest);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task RegisterConsumer_WithExistingEmail_ReturnsBadRequest()
+    {
+        // Arrange
+        var registerRequest = new ConsumerRegisterDto
+        {
+            Email = "existing@test.com",
+            Password = "Test@123",
+            FirstName = "Test",
+            LastName = "User",
+            Address = "123 Test St",
+            City = "City",
+            State = "State",
+            PostalCode = "12345"
+        };
+        _mockAuthService.Setup(s => s.RegisterConsumerAsync(registerRequest))
+          .ReturnsAsync(ApiResponse<LoginResponseDto>.ErrorResponse("Email already exists"));
+
+        // Act
+        var result = await _controller.RegisterConsumer(registerRequest);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task RegisterConsumer_WithWeakPassword_ReturnsBadRequest()
+    {
+        // Arrange
+        var registerRequest = new ConsumerRegisterDto
+        {
+            Email = "new@test.com",
+            Password = "weak",
+            FirstName = "Test",
+            LastName = "User",
+            Address = "123 Test St",
+            City = "City",
+            State = "State",
+            PostalCode = "12345"
+        };
+        _mockAuthService.Setup(s => s.RegisterConsumerAsync(registerRequest))
+       .ReturnsAsync(ApiResponse<LoginResponseDto>.ErrorResponse("Password does not meet requirements"));
+
+        // Act
+        var result = await _controller.RegisterConsumer(registerRequest);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task RegisterStaff_WithValidData_ReturnsOkResult()
+    {
+        // Arrange
+        SetupUserClaims(1, "Admin");
+        var registerRequest = new RegisterRequestDto
+        {
+            Email = "staff@test.com",
+            Password = "Staff@123",
+            FirstName = "Staff",
+            LastName = "User",
+            Role = "BillingOfficer"
+        };
+        var userDto = new UserDto { Id = 1, Role = "BillingOfficer" };
+        _mockAuthService.Setup(s => s.RegisterAsync(registerRequest))
+      .ReturnsAsync(ApiResponse<UserDto>.SuccessResponse(userDto));
+
+        // Act
+        var result = await _controller.RegisterStaff(registerRequest);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task RegisterStaff_WithExistingEmail_ReturnsBadRequest()
+    {
+        // Arrange
+        SetupUserClaims(1, "Admin");
+        var registerRequest = new RegisterRequestDto
+        {
+            Email = "existing@test.com",
+            Password = "Staff@123",
+            FirstName = "Staff",
+            LastName = "User",
+            Role = "BillingOfficer"
+        };
+        _mockAuthService.Setup(s => s.RegisterAsync(registerRequest))
+ .ReturnsAsync(ApiResponse<UserDto>.ErrorResponse("Email already exists"));
+
+        // Act
+        var result = await _controller.RegisterStaff(registerRequest);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task RegisterStaff_WithInvalidRole_ReturnsBadRequest()
+    {
+        // Arrange
+        SetupUserClaims(1, "Admin");
+        var registerRequest = new RegisterRequestDto
+        {
+            Email = "staff@test.com",
+            Password = "Staff@123",
+            FirstName = "Staff",
+            LastName = "User",
+            Role = "InvalidRole"
+        };
+        _mockAuthService.Setup(s => s.RegisterAsync(registerRequest))
+      .ReturnsAsync(ApiResponse<UserDto>.ErrorResponse("Invalid role specified"));
+
+        // Act
+        var result = await _controller.RegisterStaff(registerRequest);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetAllUsers_ReturnsOkResult()
+    {
+        // Arrange
+        var users = new List<UserDto> { new UserDto { Id = 1, Role = "Admin" } };
+        var paginationParams = new PaginationParams { PageNumber = 1, PageSize = 10 };
+        var pagedResponse = new PagedResponse<UserDto>
+        {
+            Data = users,
+            Success = true,
+            TotalRecords = 1,
+            PageNumber = 1,
+            PageSize = 10
+        };
+        _mockAuthService.Setup(s => s.GetAllUsersAsync(It.IsAny<PaginationParams>()))
+            .ReturnsAsync(pagedResponse);
+
+        // Act
+        var result = await _controller.GetAllUsers(paginationParams);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateUser_WithValidData_ReturnsOkResult()
+    {
+        // Arrange
+        var updateDto = new UpdateUserDto { FirstName = "Updated", LastName = "Name", IsActive = true };
+        var userDto = new UserDto { Id = 5, FirstName = "Updated", LastName = "Name" };
+        _mockAuthService.Setup(s => s.UpdateUserAsync(5, updateDto))
+            .ReturnsAsync(ApiResponse<UserDto>.SuccessResponse(userDto));
+
+        // Act
+        var result = await _controller.UpdateUser(5, updateDto);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateUser_NotFound_ReturnsBadRequest()
+    {
+        // Arrange
+        var updateDto = new UpdateUserDto { FirstName = "Updated", LastName = "Name" };
+        _mockAuthService.Setup(s => s.UpdateUserAsync(999, updateDto))
+        .ReturnsAsync(ApiResponse<UserDto>.ErrorResponse("User not found"));
+
+        // Act
+        var result = await _controller.UpdateUser(999, updateDto);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task DeleteUser_WithValidId_ReturnsOkResult()
+    {
+        // Arrange
+        _mockAuthService.Setup(s => s.DeleteUserAsync(5))
+               .ReturnsAsync(ApiResponse<bool>.SuccessResponse(true));
+
+        // Act
+        var result = await _controller.DeleteUser(5);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task DeleteUser_NotFound_ReturnsBadRequest()
+    {
+        // Arrange
+        _mockAuthService.Setup(s => s.DeleteUserAsync(999))
+    .ReturnsAsync(ApiResponse<bool>.ErrorResponse("User not found"));
+
+        // Act
+        var result = await _controller.DeleteUser(999);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task DeleteUser_CannotDeleteSelf_ReturnsBadRequest()
+    {
+        // Arrange
+        _mockAuthService.Setup(s => s.DeleteUserAsync(1))
+  .ReturnsAsync(ApiResponse<bool>.ErrorResponse("Cannot delete your own account"));
+
+        // Act
+        var result = await _controller.DeleteUser(1);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+}

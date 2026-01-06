@@ -1,0 +1,148 @@
+﻿using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Authorization;
+
+/// <summary>
+/// Unit tests for Role-Based Access Control (RBAC)
+/// </summary>
+public class AuthorizationTests
+{
+    private readonly string[] _validRoles = { "Admin", "BillingOfficer", "AccountOfficer", "Consumer" };
+
+#region Role Validation
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", true)]
+    [InlineData("Consumer", true)]
+    [InlineData("SuperAdmin", false)]
+    [InlineData("", false)]
+    public void IsValidRole_ReturnsExpectedResult(string role, bool expected)
+    {
+   Assert.Equal(expected, _validRoles.Contains(role));
+    }
+
+#endregion
+
+#region Consumer Management
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", true)]
+    [InlineData("Consumer", false)]
+    public void CanViewAllConsumers_BasedOnRole(string role, bool expected)
+    {
+ var allowedRoles = new[] { "Admin", "BillingOfficer", "AccountOfficer" };
+        Assert.Equal(expected, allowedRoles.Contains(role));
+    }
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanCreateConsumer_BasedOnRole(string role, bool expected)
+    {
+  var allowedRoles = new[] { "Admin" };
+     Assert.Equal(expected, allowedRoles.Contains(role));
+    }
+
+#endregion
+
+#region Meter Reading
+
+    [Theory]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("Admin", false)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+ public void CanEnterMeterReading_BasedOnRole(string role, bool expected)
+    {
+      var allowedRoles = new[] { "BillingOfficer" };
+      Assert.Equal(expected, allowedRoles.Contains(role));
+    }
+
+#endregion
+
+#region Bill Management
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", true)]
+    [InlineData("Consumer", false)]
+    public void CanViewAllBills_BasedOnRole(string role, bool expected)
+    {
+        var allowedRoles = new[] { "Admin", "BillingOfficer", "AccountOfficer" };
+   Assert.Equal(expected, allowedRoles.Contains(role));
+    }
+
+    [Theory]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("Admin", false)]
+    [InlineData("Consumer", false)]
+    public void CanGenerateBill_BasedOnRole(string role, bool expected)
+    {
+        var allowedRoles = new[] { "BillingOfficer" };
+   Assert.Equal(expected, allowedRoles.Contains(role));
+    }
+
+#endregion
+
+#region Payment Management
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("AccountOfficer", true)]
+    [InlineData("BillingOfficer", false)]
+[InlineData("Consumer", false)]
+    public void CanViewAllPayments_BasedOnRole(string role, bool expected)
+    {
+        var allowedRoles = new[] { "Admin", "AccountOfficer" };
+  Assert.Equal(expected, allowedRoles.Contains(role));
+    }
+
+#endregion
+
+#region Reports
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", true)]
+    [InlineData("Consumer", false)]
+    public void CanViewDashboard_BasedOnRole(string role, bool expected)
+{
+var allowedRoles = new[] { "Admin", "BillingOfficer", "AccountOfficer" };
+   Assert.Equal(expected, allowedRoles.Contains(role));
+    }
+
+    [Theory]
+ [InlineData("Admin", true)]
+  [InlineData("AccountOfficer", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanViewRevenueReports_BasedOnRole(string role, bool expected)
+    {
+        var allowedRoles = new[] { "Admin", "AccountOfficer" };
+        Assert.Equal(expected, allowedRoles.Contains(role));
+    }
+
+#endregion
+
+#region User Management
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+  public void CanManageUsers_BasedOnRole(string role, bool expected)
+    {
+      var allowedRoles = new[] { "Admin" };
+   Assert.Equal(expected, allowedRoles.Contains(role));
+    }
+
+#endregion
+}

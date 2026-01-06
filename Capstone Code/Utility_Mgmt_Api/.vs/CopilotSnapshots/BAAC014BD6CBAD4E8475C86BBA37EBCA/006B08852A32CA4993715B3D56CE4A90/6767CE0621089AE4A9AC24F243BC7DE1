@@ -1,0 +1,14 @@
+﻿using UtilityManagmentApi.DTOs.BillingCycle;
+using UtilityManagmentApi.DTOs.Common;
+
+namespace UtilityManagmentApi.Services.Interfaces;
+
+public interface IBillingCycleService
+{
+    Task<ApiResponse<BillingCycleDto>> GetByIdAsync(int id);
+    Task<ApiResponse<BillingCycleDto>> GetCurrentCycleAsync();
+    Task<ApiResponse<List<BillingCycleDto>>> GetAllAsync(int? year = null);
+    Task<ApiResponse<BillingCycleDto>> CreateAsync(CreateBillingCycleDto dto, int userId);
+    Task<ApiResponse<BillingCycleDto>> UpdateAsync(int id, UpdateBillingCycleDto dto);
+    Task<ApiResponse<bool>> DeleteAsync(int id);
+}

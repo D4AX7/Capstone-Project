@@ -1,0 +1,211 @@
+﻿using Xunit;
+using Moq;
+using UtilityManagmentApi.DTOs.Bill;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.Entities;
+using UtilityManagmentApi.Services.Implementations;
+using UtilityManagmentApi.Services.Interfaces;
+using UtilityManagmentApi.Tests.Helpers;
+
+namespace UtilityManagmentApi.Tests.Services;
+
+public class BillServiceTests
+{
+    private readonly Mock<INotificationService> _notificationServiceMock;
+
+    public BillServiceTests()
+    {
+ _notificationServiceMock = new Mock<INotificationService>();
+ }
+
+    [Fact]
+  public async Task GenerateBillAsync_ValidReading_GeneratesBill()
+    {
+    // Arrange
+ var context = TestDbContextFactory.CreateInMemoryContext("BillTest_Generate");
+        await TestDbContextFactory.SeedTestDataAsync(context);
+  var service = new BillService(context, _notificationServiceMock.Object);
+
+        var dto = new GenerateBillDto
+        {
+ ConnectionId = 1,
+       BillingMonth = DateTime.UtcNow.Month,
+    BillingYear = DateTime.UtcNow.Year
+     };
+
+        // Act
+   var result = await service.GenerateBillAsync(dto, 2);
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+       Assert.Equal(500, result.Data.UnitsConsumed); // From seed data
+    Assert.True(result.Data.TotalAmount > 0);
+        Assert.Equal("Generated", result.Data.Status);
+    }
+
+  [Fact]
+    public async Task GenerateBillAsync_NoReading_ReturnsError()
+    {
+     // Arrange
+      var context = TestDbContextFactory.CreateInMemoryContext("BillTest_NoReading");
+     await TestDbContextFactory.SeedTestDataAsync(context);
+     var service = new BillService(context, _notificationServiceMock.Object);
+
+     var dto = new GenerateBillDto
+     {
+         ConnectionId = 1,
+           BillingMonth = 12, // No reading for this month
+  BillingYear = 2030
+        };
+
+   // Act
+        var result = await service.GenerateBillAsync(dto, 2);
+
+        // Assert
+ Assert.False(result.Success);
+        Assert.Contains("Meter reading not found", result.Message);
+    }
+
+ [Fact]
+    public async Task GenerateBillAsync_DuplicateBill_ReturnsError()
+    {
+     // Arrange
+   var context = TestDbContextFactory.CreateInMemoryContext("BillTest_Duplicate");
+ await TestDbContextFactory.SeedTestDataAsync(context);
+        var service = new BillService(context, _notificationServiceMock.Object);
+
+var dto = new GenerateBillDto
+     {
+     ConnectionId = 1,
+    BillingMonth = DateTime.UtcNow.Month,
+ BillingYear = DateTime.UtcNow.Year
+   };
+
+// Generate first bill
+   await service.GenerateBillAsync(dto, 2);
+
+        // Act - try to generate duplicate
+        var result = await service.GenerateBillAsync(dto, 2);
+
+       // Assert
+      Assert.False(result.Success);
+        Assert.Contains("already exists", result.Message);
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_ReturnsBillStatistics()
+    {
+    // Arrange
+      var context = TestDbContextFactory.CreateInMemoryContext("BillTest_Summary");
+  await TestDbContextFactory.SeedTestDataAsync(context);
+  var service = new BillService(context, _notificationServiceMock.Object);
+
+  // Generate a bill first
+await service.GenerateBillAsync(new GenerateBillDto
+  {
+   ConnectionId = 1,
+         BillingMonth = DateTime.UtcNow.Month,
+    BillingYear = DateTime.UtcNow.Year
+       }, 2);
+
+        // Act
+    var result = await service.GetSummaryAsync();
+
+     // Assert
+        Assert.True(result.Success);
+     Assert.NotNull(result.Data);
+   Assert.True(result.Data.TotalBills >= 1);
+ Assert.True(result.Data.TotalBilledAmount > 0);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WithFilters_ReturnsFilteredBills()
+    {
+        // Arrange
+   var context = TestDbContextFactory.CreateInMemoryContext("BillTest_Filter");
+  await TestDbContextFactory.SeedTestDataAsync(context);
+     var service = new BillService(context, _notificationServiceMock.Object);
+
+   // Generate a bill
+        await service.GenerateBillAsync(new GenerateBillDto
+ {
+    ConnectionId = 1,
+  BillingMonth = DateTime.UtcNow.Month,
+ BillingYear = DateTime.UtcNow.Year
+        }, 2);
+
+  // Act - filter by status
+        var result = await service.GetAllAsync(
+    new PaginationParams { PageNumber = 1, PageSize = 10 },
+      status: "Generated"
+        );
+
+   // Assert
+   Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+ Assert.All(result.Data, b => Assert.Equal("Generated", b.Status));
+    }
+
+    [Fact]
+    public async Task GetOverdueBillsAsync_ReturnsOverdueBills()
+    {
+   // Arrange
+       var context = TestDbContextFactory.CreateInMemoryContext("BillTest_Overdue");
+        await TestDbContextFactory.SeedTestDataAsync(context);
+  var service = new BillService(context, _notificationServiceMock.Object);
+
+     // Generate a bill and manually set it as overdue
+  var billResult = await service.GenerateBillAsync(new GenerateBillDto
+        {
+ ConnectionId = 1,
+   BillingMonth = DateTime.UtcNow.Month,
+   BillingYear = DateTime.UtcNow.Year
+   }, 2);
+
+        // Manually update due date to past
+        var bill = context.Bills.First();
+  bill.DueDate = DateTime.UtcNow.AddDays(-30);
+ await context.SaveChangesAsync();
+
+        // Act
+  var result = await service.GetOverdueBillsAsync();
+
+  // Assert
+   Assert.True(result.Success);
+     Assert.NotNull(result.Data);
+        Assert.True(result.Data.Count >= 1);
+    }
+
+    [Fact]
+    public async Task UpdateOverdueBillsAsync_AppliesPenalty()
+    {
+        // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("BillTest_Penalty");
+  await TestDbContextFactory.SeedTestDataAsync(context);
+  var service = new BillService(context, _notificationServiceMock.Object);
+
+        // Generate a bill
+      await service.GenerateBillAsync(new GenerateBillDto
+        {
+ ConnectionId = 1,
+       BillingMonth = DateTime.UtcNow.Month,
+     BillingYear = DateTime.UtcNow.Year
+   }, 2);
+
+   // Set due date to past
+ var bill = context.Bills.First();
+      var originalTotal = bill.TotalAmount;
+        bill.DueDate = DateTime.UtcNow.AddDays(-10);
+        await context.SaveChangesAsync();
+
+        // Act
+ await service.UpdateOverdueBillsAsync();
+
+// Assert
+  var updatedBill = context.Bills.First();
+        Assert.Equal(BillStatus.Overdue, updatedBill.Status);
+       Assert.True(updatedBill.PenaltyAmount > 0);
+      Assert.True(updatedBill.TotalAmount > originalTotal);
+    }
+}

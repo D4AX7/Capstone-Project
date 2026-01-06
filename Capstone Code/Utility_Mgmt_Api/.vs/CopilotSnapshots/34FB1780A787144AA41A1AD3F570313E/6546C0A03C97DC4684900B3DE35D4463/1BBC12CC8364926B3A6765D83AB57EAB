@@ -1,0 +1,212 @@
+﻿using Microsoft.EntityFrameworkCore;
+using UtilityManagmentApi.Data;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Notification;
+using UtilityManagmentApi.Entities;
+using UtilityManagmentApi.Services.Interfaces;
+
+namespace UtilityManagmentApi.Services.Implementations;
+
+public class NotificationService : INotificationService
+{
+    private readonly ApplicationDbContext _context;
+
+    public NotificationService(ApplicationDbContext context)
+    {
+   _context = context;
+ }
+
+    public async Task<ApiResponse<NotificationDto>> GetByIdAsync(int id)
+ {
+   var notification = await _context.Notifications.FindAsync(id);
+        if (notification == null)
+   {
+     return ApiResponse<NotificationDto>.ErrorResponse("Notification not found");
+  }
+
+    return ApiResponse<NotificationDto>.SuccessResponse(MapToDto(notification));
+    }
+
+    public async Task<ApiResponse<List<NotificationDto>>> GetByUserIdAsync(int userId, bool? isRead = null)
+ {
+ var query = _context.Notifications
+            .Where(n => n.UserId == userId)
+     .AsQueryable();
+
+  if (isRead.HasValue)
+        {
+  query = query.Where(n => n.IsRead == isRead.Value);
+        }
+
+  var notifications = await query
+    .OrderByDescending(n => n.CreatedAt)
+    .Take(100)
+            .Select(n => MapToDto(n))
+      .ToListAsync();
+
+        return ApiResponse<List<NotificationDto>>.SuccessResponse(notifications);
+ }
+
+public async Task<ApiResponse<NotificationSummaryDto>> GetSummaryAsync(int userId)
+    {
+   var notifications = await _context.Notifications
+        .Where(n => n.UserId == userId)
+ .OrderByDescending(n => n.CreatedAt)
+      .Take(10)
+.ToListAsync();
+
+        var totalCount = await _context.Notifications.CountAsync(n => n.UserId == userId);
+        var unreadCount = await _context.Notifications.CountAsync(n => n.UserId == userId && !n.IsRead);
+
+  var summary = new NotificationSummaryDto
+   {
+     TotalNotifications = totalCount,
+  UnreadCount = unreadCount,
+        RecentNotifications = notifications.Select(MapToDto).ToList()
+        };
+
+   return ApiResponse<NotificationSummaryDto>.SuccessResponse(summary);
+    }
+
+    public async Task<ApiResponse<NotificationDto>> CreateAsync(CreateNotificationDto dto)
+    {
+ if (!Enum.TryParse<NotificationType>(dto.Type, true, out var type))
+        {
+            return ApiResponse<NotificationDto>.ErrorResponse("Invalid notification type");
+        }
+
+  var notification = new Notification
+     {
+       UserId = dto.UserId,
+ Title = dto.Title,
+    Message = dto.Message,
+     Type = type,
+          RelatedEntityId = dto.RelatedEntityId,
+     RelatedEntityType = dto.RelatedEntityType,
+     IsRead = false,
+            CreatedAt = DateTime.UtcNow
+  };
+
+    _context.Notifications.Add(notification);
+  await _context.SaveChangesAsync();
+
+        return ApiResponse<NotificationDto>.SuccessResponse(MapToDto(notification));
+    }
+
+    public async Task<ApiResponse<bool>> MarkAsReadAsync(int id)
+    {
+        var notification = await _context.Notifications.FindAsync(id);
+        if (notification == null)
+     {
+     return ApiResponse<bool>.ErrorResponse("Notification not found");
+    }
+
+        notification.IsRead = true;
+ notification.ReadAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return ApiResponse<bool>.SuccessResponse(true, "Notification marked as read");
+    }
+
+    public async Task<ApiResponse<bool>> MarkAllAsReadAsync(int userId)
+    {
+      var notifications = await _context.Notifications
+     .Where(n => n.UserId == userId && !n.IsRead)
+ .ToListAsync();
+
+   foreach (var notification in notifications)
+    {
+    notification.IsRead = true;
+     notification.ReadAt = DateTime.UtcNow;
+  }
+
+        await _context.SaveChangesAsync();
+
+        return ApiResponse<bool>.SuccessResponse(true, $"Marked {notifications.Count} notifications as read");
+ }
+
+    public async Task<ApiResponse<bool>> DeleteAsync(int id)
+    {
+   var notification = await _context.Notifications.FindAsync(id);
+        if (notification == null)
+        {
+        return ApiResponse<bool>.ErrorResponse("Notification not found");
+  }
+
+   _context.Notifications.Remove(notification);
+     await _context.SaveChangesAsync();
+
+        return ApiResponse<bool>.SuccessResponse(true, "Notification deleted");
+    }
+
+    public async Task CreateBillGeneratedNotificationAsync(int userId, int billId, string billNumber, decimal amount)
+    {
+    var notification = new Notification
+   {
+    UserId = userId,
+         Title = "New Bill Generated",
+     Message = $"A new bill ({billNumber}) has been generated for {amount:C}. Please pay before the due date.",
+      Type = NotificationType.BillGenerated,
+  RelatedEntityId = billId,
+            RelatedEntityType = "Bill",
+ IsRead = false,
+  CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Notifications.Add(notification);
+        await _context.SaveChangesAsync();
+    }
+
+  public async Task CreatePaymentReceivedNotificationAsync(int userId, int paymentId, decimal amount)
+    {
+  var notification = new Notification
+     {
+       UserId = userId,
+            Title = "Payment Received",
+  Message = $"Your payment of {amount:C} has been received successfully. Thank you!",
+  Type = NotificationType.PaymentReceived,
+  RelatedEntityId = paymentId,
+ RelatedEntityType = "Payment",
+ IsRead = false,
+      CreatedAt = DateTime.UtcNow
+        };
+
+_context.Notifications.Add(notification);
+        await _context.SaveChangesAsync();
+    }
+
+public async Task CreateDueDateReminderAsync(int userId, int billId, string billNumber, DateTime dueDate)
+ {
+        var notification = new Notification
+      {
+         UserId = userId,
+  Title = "Payment Due Reminder",
+     Message = $"Reminder: Bill {billNumber} is due on {dueDate:MMM dd, yyyy}. Please make your payment to avoid late fees.",
+            Type = NotificationType.DueDateReminder,
+     RelatedEntityId = billId,
+       RelatedEntityType = "Bill",
+  IsRead = false,
+   CreatedAt = DateTime.UtcNow
+     };
+
+        _context.Notifications.Add(notification);
+    await _context.SaveChangesAsync();
+    }
+
+    private static NotificationDto MapToDto(Notification notification)
+    {
+        return new NotificationDto
+    {
+        Id = notification.Id,
+   Title = notification.Title,
+      Message = notification.Message,
+      Type = notification.Type.ToString(),
+     RelatedEntityId = notification.RelatedEntityId,
+       RelatedEntityType = notification.RelatedEntityType,
+IsRead = notification.IsRead,
+          ReadAt = notification.ReadAt,
+       CreatedAt = notification.CreatedAt
+        };
+    }
+}

@@ -1,0 +1,337 @@
+﻿using Microsoft.EntityFrameworkCore;
+using UtilityManagmentApi.Data;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Connection;
+using UtilityManagmentApi.Entities;
+using UtilityManagmentApi.Services.Interfaces;
+
+namespace UtilityManagmentApi.Services.Implementations;
+
+public class ConnectionService : IConnectionService
+{
+    private readonly ApplicationDbContext _context;
+
+    public ConnectionService(ApplicationDbContext context)
+    {
+      _context = context;
+    }
+
+    public async Task<ApiResponse<ConnectionDto>> GetByIdAsync(int id)
+    {
+        var connection = await _context.Connections
+     .Include(c => c.Consumer)
+     .ThenInclude(co => co.User)
+ .Include(c => c.UtilityType)
+ .Include(c => c.TariffPlan)
+    .Include(c => c.MeterReadings.OrderByDescending(m => m.ReadingDate).Take(1))
+   .FirstOrDefaultAsync(c => c.Id == id);
+
+  if (connection == null)
+        {
+ return ApiResponse<ConnectionDto>.ErrorResponse("Connection not found");
+        }
+
+        return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(connection));
+    }
+
+    public async Task<ApiResponse<ConnectionDto>> GetByConnectionNumberAsync(string connectionNumber)
+    {
+   var connection = await _context.Connections
+     .Include(c => c.Consumer)
+  .ThenInclude(co => co.User)
+          .Include(c => c.UtilityType)
+.Include(c => c.TariffPlan)
+ .Include(c => c.MeterReadings.OrderByDescending(m => m.ReadingDate).Take(1))
+            .FirstOrDefaultAsync(c => c.ConnectionNumber == connectionNumber);
+
+   if (connection == null)
+ {
+            return ApiResponse<ConnectionDto>.ErrorResponse("Connection not found");
+     }
+
+        return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(connection));
+  }
+
+    public async Task<ApiResponse<List<ConnectionDto>>> GetByConsumerIdAsync(int consumerId)
+    {
+        var connections = await _context.Connections
+ .Include(c => c.Consumer)
+.ThenInclude(co => co.User)
+.Include(c => c.UtilityType)
+    .Include(c => c.TariffPlan)
+  .Include(c => c.MeterReadings.OrderByDescending(m => m.ReadingDate).Take(1))
+    .Where(c => c.ConsumerId == consumerId)
+  .OrderBy(c => c.UtilityType.Name)
+    .ToListAsync();
+
+   return ApiResponse<List<ConnectionDto>>.SuccessResponse(connections.Select(MapToDto).ToList());
+    }
+
+    public async Task<PagedResponse<ConnectionListDto>> GetAllAsync(PaginationParams paginationParams, int? utilityTypeId = null, string? status = null)
+  {
+     var query = _context.Connections
+            .Include(c => c.Consumer)
+.ThenInclude(co => co.User)
+.Include(c => c.UtilityType)
+     .Include(c => c.TariffPlan)
+ .AsQueryable();
+
+        if (utilityTypeId.HasValue)
+{
+     query = query.Where(c => c.UtilityTypeId == utilityTypeId.Value);
+      }
+
+    if (!string.IsNullOrEmpty(status) && Enum.TryParse<ConnectionStatus>(status, true, out var statusEnum))
+        {
+   query = query.Where(c => c.Status == statusEnum);
+  }
+
+     if (!string.IsNullOrEmpty(paginationParams.SearchTerm))
+     {
+        var searchTerm = paginationParams.SearchTerm.ToLower();
+            query = query.Where(c =>
+     c.ConnectionNumber.ToLower().Contains(searchTerm) ||
+      c.MeterNumber.ToLower().Contains(searchTerm) ||
+     c.Consumer.ConsumerNumber.ToLower().Contains(searchTerm) ||
+                c.Consumer.User.FirstName.ToLower().Contains(searchTerm) ||
+       c.Consumer.User.LastName.ToLower().Contains(searchTerm));
+        }
+
+        var totalRecords = await query.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalRecords / (double)paginationParams.PageSize);
+
+        var connections = await query
+  .OrderByDescending(c => c.CreatedAt)
+   .Skip((paginationParams.PageNumber - 1) * paginationParams.PageSize)
+          .Take(paginationParams.PageSize)
+         .Select(c => new ConnectionListDto
+   {
+ Id = c.Id,
+  ConnectionNumber = c.ConnectionNumber,
+       MeterNumber = c.MeterNumber,
+  ConsumerName = $"{c.Consumer.User.FirstName} {c.Consumer.User.LastName}",
+   UtilityType = c.UtilityType.Name,
+    TariffPlan = c.TariffPlan.Name,
+         Status = c.Status.ToString(),
+         ConnectionDate = c.ConnectionDate
+            })
+.ToListAsync();
+
+   return new PagedResponse<ConnectionListDto>
+   {
+      Data = connections,
+ PageNumber = paginationParams.PageNumber,
+PageSize = paginationParams.PageSize,
+      TotalPages = totalPages,
+         TotalRecords = totalRecords
+  };
+    }
+
+    public async Task<ApiResponse<ConnectionDto>> CreateAsync(CreateConnectionDto dto)
+    {
+   var consumer = await _context.Consumers.Include(c => c.User).FirstOrDefaultAsync(c => c.Id == dto.ConsumerId);
+        if (consumer == null)
+        {
+            return ApiResponse<ConnectionDto>.ErrorResponse("Consumer not found");
+   }
+
+      var utilityType = await _context.UtilityTypes.FindAsync(dto.UtilityTypeId);
+    if (utilityType == null)
+        {
+      return ApiResponse<ConnectionDto>.ErrorResponse("Utility type not found");
+        }
+
+  var tariffPlan = await _context.TariffPlans.FindAsync(dto.TariffPlanId);
+ if (tariffPlan == null)
+ {
+       return ApiResponse<ConnectionDto>.ErrorResponse("Tariff plan not found");
+    }
+
+        if (tariffPlan.UtilityTypeId != dto.UtilityTypeId)
+        {
+  return ApiResponse<ConnectionDto>.ErrorResponse("Tariff plan does not match utility type");
+        }
+
+       if (await _context.Connections.AnyAsync(c => c.MeterNumber == dto.MeterNumber))
+        {
+         return ApiResponse<ConnectionDto>.ErrorResponse("Meter number already exists");
+      }
+
+   var connectionNumber = await GenerateConnectionNumberAsync(dto.UtilityTypeId);
+
+     var connection = new Connection
+        {
+    ConsumerId = dto.ConsumerId,
+            UtilityTypeId = dto.UtilityTypeId,
+       TariffPlanId = dto.TariffPlanId,
+    MeterNumber = dto.MeterNumber,
+   ConnectionNumber = connectionNumber,
+         ConnectionDate = dto.ConnectionDate ?? DateTime.UtcNow,
+   Status = ConnectionStatus.Active,
+ LoadSanctioned = dto.LoadSanctioned,
+    InstallationAddress = dto.InstallationAddress ?? consumer.Address,
+            CreatedAt = DateTime.UtcNow
+     };
+
+      _context.Connections.Add(connection);
+  await _context.SaveChangesAsync();
+
+   connection.Consumer = consumer;
+    connection.UtilityType = utilityType;
+     connection.TariffPlan = tariffPlan;
+
+        return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(connection), "Connection created successfully");
+    }
+
+    public async Task<ApiResponse<ConnectionDto>> UpdateAsync(int id, UpdateConnectionDto dto)
+    {
+        var connection = await _context.Connections
+      .Include(c => c.Consumer)
+  .ThenInclude(co => co.User)
+    .Include(c => c.UtilityType)
+      .Include(c => c.TariffPlan)
+   .FirstOrDefaultAsync(c => c.Id == id);
+
+      if (connection == null)
+        {
+     return ApiResponse<ConnectionDto>.ErrorResponse("Connection not found");
+        }
+
+        if (dto.TariffPlanId.HasValue)
+        {
+        var tariffPlan = await _context.TariffPlans.FindAsync(dto.TariffPlanId.Value);
+   if (tariffPlan == null)
+      {
+       return ApiResponse<ConnectionDto>.ErrorResponse("Tariff plan not found");
+      }
+     if (tariffPlan.UtilityTypeId != connection.UtilityTypeId)
+    {
+ return ApiResponse<ConnectionDto>.ErrorResponse("Tariff plan does not match utility type");
+    }
+       connection.TariffPlanId = dto.TariffPlanId.Value;
+   connection.TariffPlan = tariffPlan;
+  }
+
+        if (!string.IsNullOrEmpty(dto.Status) && Enum.TryParse<ConnectionStatus>(dto.Status, true, out var status))
+        {
+         connection.Status = status;
+        }
+
+    if (dto.LoadSanctioned.HasValue)
+        connection.LoadSanctioned = dto.LoadSanctioned.Value;
+
+        if (!string.IsNullOrEmpty(dto.InstallationAddress))
+       connection.InstallationAddress = dto.InstallationAddress;
+
+    connection.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return ApiResponse<ConnectionDto>.SuccessResponse(MapToDto(connection), "Connection updated successfully");
+  }
+
+    public async Task<ApiResponse<bool>> DeleteAsync(int id)
+    {
+        var connection = await _context.Connections
+.Include(c => c.Bills)
+     .Include(c => c.MeterReadings)
+     .FirstOrDefaultAsync(c => c.Id == id);
+
+  if (connection == null)
+  {
+   return ApiResponse<bool>.ErrorResponse("Connection not found");
+     }
+
+        if (connection.Bills.Any() || connection.MeterReadings.Any())
+  {
+            // Soft delete - disconnect
+ connection.Status = ConnectionStatus.Disconnected;
+         connection.UpdatedAt = DateTime.UtcNow;
+         await _context.SaveChangesAsync();
+     return ApiResponse<bool>.SuccessResponse(true, "Connection disconnected successfully");
+     }
+
+        _context.Connections.Remove(connection);
+        await _context.SaveChangesAsync();
+
+        return ApiResponse<bool>.SuccessResponse(true, "Connection deleted successfully");
+  }
+
+    public async Task<ApiResponse<List<ConnectionListDto>>> GetPendingReadingsAsync(int billingMonth, int billingYear)
+    {
+        var connectionsWithReadings = await _context.MeterReadings
+   .Where(m => m.BillingMonth == billingMonth && m.BillingYear == billingYear)
+      .Select(m => m.ConnectionId)
+.ToListAsync();
+
+        var pendingConnections = await _context.Connections
+   .Include(c => c.Consumer)
+          .ThenInclude(co => co.User)
+ .Include(c => c.UtilityType)
+   .Include(c => c.TariffPlan)
+      .Where(c => c.Status == ConnectionStatus.Active && !connectionsWithReadings.Contains(c.Id))
+      .Select(c => new ConnectionListDto
+    {
+             Id = c.Id,
+ ConnectionNumber = c.ConnectionNumber,
+                MeterNumber = c.MeterNumber,
+     ConsumerName = $"{c.Consumer.User.FirstName} {c.Consumer.User.LastName}",
+         UtilityType = c.UtilityType.Name,
+     TariffPlan = c.TariffPlan.Name,
+     Status = c.Status.ToString(),
+           ConnectionDate = c.ConnectionDate
+      })
+      .ToListAsync();
+
+        return ApiResponse<List<ConnectionListDto>>.SuccessResponse(pendingConnections);
+    }
+
+    private async Task<string> GenerateConnectionNumberAsync(int utilityTypeId)
+    {
+        var utilityType = await _context.UtilityTypes.FindAsync(utilityTypeId);
+        var prefix = utilityType?.Name.Substring(0, 3).ToUpper() ?? "CON";
+        var year = DateTime.UtcNow.Year.ToString()[2..];
+
+    var lastConnection = await _context.Connections
+      .Where(c => c.ConnectionNumber.StartsWith($"{prefix}{year}"))
+.OrderByDescending(c => c.ConnectionNumber)
+.FirstOrDefaultAsync();
+
+   int nextNumber = 1;
+        if (lastConnection != null)
+   {
+      var lastNumber = lastConnection.ConnectionNumber[(prefix.Length + 2)..];
+        if (int.TryParse(lastNumber, out int num))
+      {
+    nextNumber = num + 1;
+      }
+        }
+
+     return $"{prefix}{year}{nextNumber:D6}";
+    }
+
+    private static ConnectionDto MapToDto(Connection connection)
+    {
+        var lastReading = connection.MeterReadings?.OrderByDescending(m => m.ReadingDate).FirstOrDefault();
+
+        return new ConnectionDto
+        {
+       Id = connection.Id,
+ ConsumerId = connection.ConsumerId,
+            ConsumerName = $"{connection.Consumer.User.FirstName} {connection.Consumer.User.LastName}",
+            ConsumerNumber = connection.Consumer.ConsumerNumber,
+            UtilityTypeId = connection.UtilityTypeId,
+   UtilityTypeName = connection.UtilityType.Name,
+    TariffPlanId = connection.TariffPlanId,
+     TariffPlanName = connection.TariffPlan.Name,
+    MeterNumber = connection.MeterNumber,
+ ConnectionNumber = connection.ConnectionNumber,
+            ConnectionDate = connection.ConnectionDate,
+            Status = connection.Status.ToString(),
+         LoadSanctioned = connection.LoadSanctioned,
+     InstallationAddress = connection.InstallationAddress,
+            LastReading = lastReading?.CurrentReading,
+   LastReadingDate = lastReading?.ReadingDate
+        };
+    }
+}

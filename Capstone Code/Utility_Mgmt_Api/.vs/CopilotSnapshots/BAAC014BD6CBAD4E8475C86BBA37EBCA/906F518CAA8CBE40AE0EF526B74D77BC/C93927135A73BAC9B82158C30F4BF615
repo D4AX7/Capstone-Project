@@ -1,0 +1,92 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using UtilityManagmentApi.DTOs.UtilityType;
+using UtilityManagmentApi.Services.Interfaces;
+
+namespace UtilityManagmentApi.Controllers;
+
+/// <summary>
+/// Utility Types Controller - Admin only (manages utility types)
+/// Other roles can only read utility types for their work
+/// </summary>
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class UtilityTypesController : ControllerBase
+{
+    private readonly IUtilityTypeService _utilityTypeService;
+
+    public UtilityTypesController(IUtilityTypeService utilityTypeService)
+ {
+        _utilityTypeService = utilityTypeService;
+    }
+
+    /// <summary>
+    /// Get All Utility Types - All roles can read (needed for dropdowns)
+    /// </summary>
+    [HttpGet]
+ public async Task<IActionResult> GetAll([FromQuery] bool? isActive = null)
+    {
+        var result = await _utilityTypeService.GetAllAsync(isActive);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Utility Type by ID - All roles can read
+    /// </summary>
+  [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var result = await _utilityTypeService.GetByIdAsync(id);
+  if (!result.Success)
+   {
+       return NotFound(result);
+       }
+        return Ok(result);
+}
+
+    /// <summary>
+    /// Create Utility Type - Admin only (manages utility types)
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Create([FromBody] CreateUtilityTypeDto dto)
+ {
+     var result = await _utilityTypeService.CreateAsync(dto);
+        if (!result.Success)
+      {
+         return BadRequest(result);
+        }
+        return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
+    }
+
+    /// <summary>
+    /// Update Utility Type - Admin only
+    /// </summary>
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateUtilityTypeDto dto)
+    {
+ var result = await _utilityTypeService.UpdateAsync(id, dto);
+ if (!result.Success)
+        {
+      return BadRequest(result);
+        }
+      return Ok(result);
+    }
+
+    /// <summary>
+/// Delete Utility Type - Admin only
+    /// </summary>
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var result = await _utilityTypeService.DeleteAsync(id);
+    if (!result.Success)
+ {
+        return BadRequest(result);
+        }
+        return Ok(result);
+ }
+}

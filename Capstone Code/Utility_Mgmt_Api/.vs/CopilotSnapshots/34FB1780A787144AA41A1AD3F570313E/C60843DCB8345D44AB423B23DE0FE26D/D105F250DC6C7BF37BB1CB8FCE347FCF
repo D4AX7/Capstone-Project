@@ -1,0 +1,133 @@
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace UtilityManagmentApi.Migrations
+{
+    /// <inheritdoc />
+    public partial class UpdateGeneratedBillStatusToDue : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            // Update all bills with 'Generated' status to 'Due'
+            migrationBuilder.Sql("UPDATE Bills SET Status = 'Due' WHERE Status = 'Generated'");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 1,
+                column: "PasswordHash",
+                value: "$2a$11$OFvxWNDQE4.blIY6M3BY2OP9niaQrbWiMJsJfvKhHgAMIrns/ZntG");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 2,
+                column: "PasswordHash",
+                value: "$2a$11$Em58acrA/hvMnyUKW3MGk.UmbK7Z2M9yESgJfEksHxZRbUGGP5jg6");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 3,
+                column: "PasswordHash",
+                value: "$2a$11$xmyL4.GKScuAF9VDFvi.q.JUcSojxt9bbelA5csI/8cTgvcwOaOBq");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 4,
+                column: "PasswordHash",
+                value: "$2a$11$7HSTcibuguDYvsvKBbXVg.9Le2DQr259EcSO/HkVRpeCGD3CVWV2K");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 5,
+                column: "PasswordHash",
+                value: "$2a$11$OaUc1Vdrt3QYCTjnO7Wtu.1Fz9yxzFsHQ5z3vRXtk.WQ6Gv7IGx0W");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 6,
+                column: "PasswordHash",
+                value: "$2a$11$uOk34Uq0aClQLXxsxCn/OOx1q8OJrpFLLqsmqauMREDMDCy0blOGu");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 7,
+                column: "PasswordHash",
+                value: "$2a$11$uw5HaCditG9qG0lDd0wJWe5Sa0X2XlT8Yk23JzTkDvkAwXtG9di7u");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 8,
+                column: "PasswordHash",
+                value: "$2a$11$Saz96lpebuLyQZbLzvjB5e17.M8rLGWTwjPjRQTDKVGIcfxKKE/Wm");
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 1,
+                column: "PasswordHash",
+                value: "$2a$11$XmRau4kQDejMTF18L5g/B.sLhCxj4QWvZyZ66bgfZ4kO6XUR/4.mS");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 2,
+                column: "PasswordHash",
+                value: "$2a$11$6YanF8j61dp818JzHqGqGOSOxvxL50RZM8NatHte8.7g89vzD223u");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 3,
+                column: "PasswordHash",
+                value: "$2a$11$IdhLYgPVfxOPWu57dn8o6OU.bFSmXHZdAumY/gz7ldIKiDoy37UQ.");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 4,
+                column: "PasswordHash",
+                value: "$2a$11$CzR8gfG9lxD19s/jmmk7F.WvvUOzMeRMyt6jZ6lCxT0imi17d7J2C");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 5,
+                column: "PasswordHash",
+                value: "$2a$11$EeQOVe5FS67hCzW66k93Qe.k51CzDL83hUP4pMjIOMDgk0PjDLJVi");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 6,
+                column: "PasswordHash",
+                value: "$2a$11$qK1tXunIQ7ybwKuRoaqSouolsX2udsE6QRC.cBZO3NYRJWkP7FLRW");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 7,
+                column: "PasswordHash",
+                value: "$2a$11$/cO/q39NTG8QmDcioF5wQOBiHbgN1WbntvrSoYS8Bb0GEjLE7kGK.");
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: 8,
+                column: "PasswordHash",
+                value: "$2a$11$3s6/CItapNtKKyCsxfbHwOO8slPdezJA4OtBfgLcjQmWagRECAE9C");
+        }
+    }
+}

@@ -1,0 +1,72 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace UtilityManagmentApi.DTOs.Connection;
+
+public class ConnectionDto
+{
+    public int Id { get; set; }
+    public int ConsumerId { get; set; }
+    public string ConsumerName { get; set; } = string.Empty;
+    public string ConsumerNumber { get; set; } = string.Empty;
+public int UtilityTypeId { get; set; }
+    public string UtilityTypeName { get; set; } = string.Empty;
+  public int TariffPlanId { get; set; }
+public string TariffPlanName { get; set; } = string.Empty;
+    public string MeterNumber { get; set; } = string.Empty;
+    public string ConnectionNumber { get; set; } = string.Empty;
+    public DateTime ConnectionDate { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public decimal? LoadSanctioned { get; set; }
+    public string? InstallationAddress { get; set; }
+    public decimal? LastReading { get; set; }
+    public DateTime? LastReadingDate { get; set; }
+}
+
+public class CreateConnectionDto
+{
+    [Required]
+    public int ConsumerId { get; set; }
+
+    [Required]
+    public int UtilityTypeId { get; set; }
+
+[Required]
+    public int TariffPlanId { get; set; }
+
+    [Required]
+  [MaxLength(50)]
+    public string MeterNumber { get; set; } = string.Empty;
+
+public DateTime? ConnectionDate { get; set; }
+
+    public decimal? LoadSanctioned { get; set; }
+
+    [MaxLength(500)]
+    public string? InstallationAddress { get; set; }
+}
+
+public class UpdateConnectionDto
+{
+    public int? TariffPlanId { get; set; }
+
+    public string? Status { get; set; }
+
+    public decimal? LoadSanctioned { get; set; }
+
+    [MaxLength(500)]
+    public string? InstallationAddress { get; set; }
+}
+
+public class ConnectionListDto
+{
+    public int Id { get; set; }
+    public string ConnectionNumber { get; set; } = string.Empty;
+    public string MeterNumber { get; set; } = string.Empty;
+    public string ConsumerName { get; set; } = string.Empty;
+    public int UtilityTypeId { get; set; }
+    public string UtilityType { get; set; } = string.Empty;
+  public int TariffPlanId { get; set; }
+    public string TariffPlanName { get; set; } = string.Empty;
+ public string Status { get; set; } = string.Empty;
+    public DateTime ConnectionDate { get; set; }
+}

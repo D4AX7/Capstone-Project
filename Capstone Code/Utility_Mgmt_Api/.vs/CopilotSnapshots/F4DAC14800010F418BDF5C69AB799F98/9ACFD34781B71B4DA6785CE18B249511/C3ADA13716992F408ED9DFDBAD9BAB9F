@@ -1,0 +1,154 @@
+﻿namespace UtilityManagmentApi.DTOs.Reports;
+
+public class DashboardSummaryDto
+{
+    public int TotalConsumers { get; set; }
+    public int ActiveConnections { get; set; }
+    public int PendingBills { get; set; }
+    public int OverdueBills { get; set; }
+    public decimal TotalRevenueThisMonth { get; set; }
+    public decimal TotalOutstanding { get; set; }
+    public List<RecentActivityDto> RecentActivities { get; set; } = new();
+    public List<UtilityConsumptionDto> ConsumptionByUtilityType { get; set; } = new();
+}
+
+public class RecentActivityDto
+{
+    public string Type { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; }
+}
+
+public class UtilityConsumptionDto
+{
+    public string UtilityType { get; set; } = string.Empty;
+    public decimal TotalConsumption { get; set; }
+    public string Unit { get; set; } = string.Empty;
+    public int ConnectionCount { get; set; }
+}
+
+public class MonthlyRevenueReportDto
+{
+    public int Month { get; set; }
+    public int Year { get; set; }
+    public string MonthName { get; set; } = string.Empty;
+    public decimal TotalBilledAmount { get; set; }
+    public decimal TotalCollected { get; set; }
+    public decimal TotalOutstanding { get; set; }
+    public int TotalBills { get; set; }
+    public int PaidBills { get; set; }
+    public decimal CollectionRate { get; set; }
+    public List<UtilityRevenueDto> ByUtilityType { get; set; } = new();
+}
+
+public class UtilityRevenueDto
+{
+    public string UtilityType { get; set; } = string.Empty;
+    public decimal BilledAmount { get; set; }
+    public decimal Collected { get; set; }
+    public int BillCount { get; set; }
+}
+
+public class OutstandingDuesReportDto
+{
+    public decimal TotalOutstanding { get; set; }
+    public int TotalOverdueAccounts { get; set; }
+ public List<OutstandingByAgeDto> ByAgeBucket { get; set; } = new();
+    public List<ConsumerOutstandingDto> TopDefaulters { get; set; } = new();
+}
+
+public class OutstandingByAgeDto
+{
+    public string AgeBucket { get; set; } = string.Empty; // e.g., "0-30 days", "31-60 days"
+    public decimal Amount { get; set; }
+    public int Count { get; set; }
+}
+
+public class ConsumerOutstandingDto
+{
+    public int ConsumerId { get; set; }
+    public string ConsumerNumber { get; set; } = string.Empty;
+    public string ConsumerName { get; set; } = string.Empty;
+    public decimal OutstandingAmount { get; set; }
+    public int OverdueBills { get; set; }
+    public DateTime? OldestDueDate { get; set; }
+}
+
+public class ConsumptionReportDto
+{
+    public int Month { get; set; }
+    public int Year { get; set; }
+    public List<UtilityConsumptionDetailDto> ByUtilityType { get; set; } = new();
+    public List<TopConsumerDto> TopConsumers { get; set; } = new();
+    public decimal TotalConsumption { get; set; }
+    public decimal AverageConsumption { get; set; }
+}
+
+public class UtilityConsumptionDetailDto
+{
+public string UtilityType { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public decimal TotalConsumption { get; set; }
+    public decimal AverageConsumption { get; set; }
+    public decimal MinConsumption { get; set; }
+    public decimal MaxConsumption { get; set; }
+    public int ConnectionCount { get; set; }
+}
+
+public class TopConsumerDto
+{
+    public int ConsumerId { get; set; }
+    public string ConsumerNumber { get; set; } = string.Empty;
+    public string ConsumerName { get; set; } = string.Empty;
+    public string UtilityType { get; set; } = string.Empty;
+    public decimal Consumption { get; set; }
+    public string Unit { get; set; } = string.Empty;
+}
+
+public class ConsumerBillingSummaryDto
+{
+    public int ConsumerId { get; set; }
+    public string ConsumerNumber { get; set; } = string.Empty;
+    public string ConsumerName { get; set; } = string.Empty;
+    public int TotalBills { get; set; }
+    public decimal TotalBilledAmount { get; set; }
+  public decimal TotalPaid { get; set; }
+    public decimal OutstandingBalance { get; set; }
+    public List<ConnectionBillingSummaryDto> Connections { get; set; } = new();
+}
+
+public class ConnectionBillingSummaryDto
+{
+    public int ConnectionId { get; set; }
+    public string ConnectionNumber { get; set; } = string.Empty;
+    public string UtilityType { get; set; } = string.Empty;
+  public int BillCount { get; set; }
+    public decimal TotalBilled { get; set; }
+    public decimal TotalPaid { get; set; }
+    public decimal Outstanding { get; set; }
+    public decimal TotalConsumption { get; set; }
+}
+
+public class CollectionReportDto
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public decimal TotalCollected { get; set; }
+    public List<DailyCollectionDto> DailyCollections { get; set; } = new();
+    public List<PaymentMethodCollectionDto> ByPaymentMethod { get; set; } = new();
+}
+
+public class DailyCollectionDto
+{
+    public DateTime Date { get; set; }
+    public decimal Amount { get; set; }
+    public int PaymentCount { get; set; }
+}
+
+public class PaymentMethodCollectionDto
+{
+    public string PaymentMethod { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public int Count { get; set; }
+    public decimal Percentage { get; set; }
+}

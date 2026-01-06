@@ -1,0 +1,62 @@
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace UtilityManagmentApi.Entities;
+
+public class Connection
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    public int ConsumerId { get; set; }
+
+    [Required]
+    public int UtilityTypeId { get; set; }
+
+    [Required]
+    public int TariffPlanId { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string MeterNumber { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(100)]
+    public string ConnectionNumber { get; set; } = string.Empty;
+
+    public DateTime ConnectionDate { get; set; }
+
+    public ConnectionStatus Status { get; set; } = ConnectionStatus.Active;
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal? LoadSanctioned { get; set; } // For electricity
+
+    [MaxLength(500)]
+    public string? InstallationAddress { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAt { get; set; }
+
+    // Navigation properties
+    [ForeignKey("ConsumerId")]
+    public Consumer Consumer { get; set; } = null!;
+
+    [ForeignKey("UtilityTypeId")]
+    public UtilityType UtilityType { get; set; } = null!;
+
+    [ForeignKey("TariffPlanId")]
+    public TariffPlan TariffPlan { get; set; } = null!;
+
+    public ICollection<MeterReading> MeterReadings { get; set; } = new List<MeterReading>();
+    public ICollection<Bill> Bills { get; set; } = new List<Bill>();
+}
+
+public enum ConnectionStatus
+{
+    Active = 1,
+    Inactive = 2,
+    Suspended = 3,
+    Disconnected = 4
+}

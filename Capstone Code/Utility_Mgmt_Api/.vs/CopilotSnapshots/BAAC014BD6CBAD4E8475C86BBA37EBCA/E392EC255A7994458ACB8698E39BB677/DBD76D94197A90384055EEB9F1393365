@@ -1,0 +1,190 @@
+﻿using Xunit;
+using Microsoft.Extensions.Configuration;
+using UtilityManagmentApi.DTOs.Auth;
+using UtilityManagmentApi.Entities;
+using UtilityManagmentApi.Services.Implementations;
+using UtilityManagmentApi.Tests.Helpers;
+
+namespace UtilityManagmentApi.Tests.Services;
+
+public class AuthServiceTests
+{
+    private readonly IConfiguration _configuration;
+
+ public AuthServiceTests()
+    {
+        var inMemorySettings = new Dictionary<string, string?>
+        {
+ {"JwtSettings:SecretKey", "YourSuperSecretKeyForJWTTokenGeneration2024TestKey!@#$%"},
+     {"JwtSettings:Issuer", "TestIssuer"},
+      {"JwtSettings:Audience", "TestAudience"},
+    {"JwtSettings:ExpirationHours", "24"}
+        };
+
+   _configuration = new ConfigurationBuilder()
+.AddInMemoryCollection(inMemorySettings)
+   .Build();
+    }
+
+ [Fact]
+    public async Task LoginAsync_ValidCredentials_ReturnsToken()
+    {
+     // Arrange
+     var context = TestDbContextFactory.CreateInMemoryContext("AuthTest_Login");
+        var service = new AuthService(context, _configuration);
+
+// Act
+        var result = await service.LoginAsync(new LoginRequestDto
+        {
+      Email = "admin@utilitybilling.com",
+    Password = "Admin@123"
+        });
+
+        // Assert
+        Assert.True(result.Success);
+  Assert.NotNull(result.Data);
+   Assert.NotNull(result.Data.Token);
+      Assert.Equal("Admin", result.Data.User.Role);
+    }
+
+    [Fact]
+ public async Task LoginAsync_InvalidPassword_ReturnsError()
+    {
+ // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("AuthTest_InvalidPassword");
+    var service = new AuthService(context, _configuration);
+
+        // Act
+        var result = await service.LoginAsync(new LoginRequestDto
+     {
+  Email = "admin@utilitybilling.com",
+       Password = "WrongPassword"
+      });
+
+        // Assert
+   Assert.False(result.Success);
+        Assert.Equal("Invalid email or password", result.Message);
+    }
+
+    [Fact]
+  public async Task LoginAsync_NonExistentUser_ReturnsError()
+    {
+        // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("AuthTest_NonExistent");
+        var service = new AuthService(context, _configuration);
+
+     // Act
+        var result = await service.LoginAsync(new LoginRequestDto
+        {
+  Email = "nonexistent@test.com",
+            Password = "Test@123"
+        });
+
+        // Assert
+    Assert.False(result.Success);
+    Assert.Equal("Invalid email or password", result.Message);
+  }
+
+    [Fact]
+    public async Task RegisterAsync_ValidRequest_CreatesUser()
+    {
+   // Arrange
+       var context = TestDbContextFactory.CreateInMemoryContext("AuthTest_Register");
+  var service = new AuthService(context, _configuration);
+
+      var request = new RegisterRequestDto
+     {
+    FirstName = "Test",
+     LastName = "User",
+      Email = "newuser@test.com",
+  Password = "Test@123",
+            Phone = "1234567890",
+      Role = "BillingOfficer"
+        };
+
+ // Act
+        var result = await service.RegisterAsync(request);
+
+        // Assert
+      Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+     Assert.Equal("Test", result.Data.FirstName);
+       Assert.Equal("BillingOfficer", result.Data.Role);
+    }
+
+    [Fact]
+ public async Task RegisterAsync_DuplicateEmail_ReturnsError()
+    {
+        // Arrange
+ var context = TestDbContextFactory.CreateInMemoryContext("AuthTest_DuplicateEmail");
+    var service = new AuthService(context, _configuration);
+
+        var request = new RegisterRequestDto
+        {
+    FirstName = "Test",
+            LastName = "User",
+  Email = "admin@utilitybilling.com", // Already exists
+   Password = "Test@123",
+    Role = "BillingOfficer"
+        };
+
+   // Act
+        var result = await service.RegisterAsync(request);
+
+        // Assert
+   Assert.False(result.Success);
+ Assert.Equal("Email already exists", result.Message);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ValidRequest_ChangesPassword()
+    {
+        // Arrange
+      var context = TestDbContextFactory.CreateInMemoryContext("AuthTest_ChangePassword");
+      var service = new AuthService(context, _configuration);
+
+    // First create a user
+        var registerResult = await service.RegisterAsync(new RegisterRequestDto
+        {
+            FirstName = "Test",
+  LastName = "User",
+     Email = "changepass@test.com",
+    Password = "OldPass@123",
+   Role = "Consumer"
+      });
+
+        // Act
+   var result = await service.ChangePasswordAsync(registerResult.Data!.Id, new ChangePasswordDto
+  {
+      CurrentPassword = "OldPass@123",
+            NewPassword = "NewPass@123"
+        });
+
+     // Assert
+        Assert.True(result.Success);
+
+        // Verify new password works
+        var loginResult = await service.LoginAsync(new LoginRequestDto
+        {
+            Email = "changepass@test.com",
+     Password = "NewPass@123"
+   });
+     Assert.True(loginResult.Success);
+    }
+
+    [Fact]
+    public async Task GetAllUsersAsync_ReturnsAllUsers()
+    {
+   // Arrange
+      var context = TestDbContextFactory.CreateInMemoryContext("AuthTest_GetAll");
+      var service = new AuthService(context, _configuration);
+
+        // Act
+   var result = await service.GetAllUsersAsync();
+
+        // Assert
+  Assert.True(result.Success);
+   Assert.NotNull(result.Data);
+        Assert.True(result.Data.Count >= 1); // At least admin exists
+    }
+}

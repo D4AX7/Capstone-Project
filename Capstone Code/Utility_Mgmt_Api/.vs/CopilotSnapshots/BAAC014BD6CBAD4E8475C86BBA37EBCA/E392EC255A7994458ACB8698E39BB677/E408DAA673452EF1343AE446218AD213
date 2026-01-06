@@ -1,0 +1,124 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.MeterReading;
+using UtilityManagmentApi.Services.Interfaces;
+using System.Security.Claims;
+
+namespace UtilityManagmentApi.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class MeterReadingsController : ControllerBase
+{
+    private readonly IMeterReadingService _meterReadingService;
+
+    public MeterReadingsController(IMeterReadingService meterReadingService)
+    {
+      _meterReadingService = meterReadingService;
+    }
+
+    [HttpGet]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> GetAll(
+  [FromQuery] PaginationParams paginationParams,
+[FromQuery] int? billingMonth = null,
+   [FromQuery] int? billingYear = null)
+    {
+ var result = await _meterReadingService.GetAllAsync(paginationParams, billingMonth, billingYear);
+        return Ok(result);
+    }
+
+    [HttpGet("{id}")]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+  public async Task<IActionResult> GetById(int id)
+    {
+        var result = await _meterReadingService.GetByIdAsync(id);
+    if (!result.Success)
+  {
+   return NotFound(result);
+   }
+ return Ok(result);
+ }
+
+    [HttpGet("connection/{connectionId}")]
+    [Authorize(Roles = "Admin,BillingOfficer,Consumer")]
+    public async Task<IActionResult> GetByConnectionId(int connectionId)
+    {
+        var result = await _meterReadingService.GetByConnectionIdAsync(connectionId);
+  return Ok(result);
+    }
+
+    [HttpGet("unbilled")]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> GetUnbilledReadings([FromQuery] int billingMonth, [FromQuery] int billingYear)
+    {
+        var result = await _meterReadingService.GetUnbilledReadingsAsync(billingMonth, billingYear);
+   return Ok(result);
+  }
+
+    [HttpGet("last-reading/{connectionId}")]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> GetLastReading(int connectionId)
+    {
+     var result = await _meterReadingService.GetLastReadingAsync(connectionId);
+        return Ok(result);
+  }
+
+    [HttpPost]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> Create([FromBody] CreateMeterReadingDto dto)
+    {
+       var userId = GetCurrentUserId();
+       var result = await _meterReadingService.CreateAsync(dto, userId);
+        if (!result.Success)
+        {
+    return BadRequest(result);
+        }
+ return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
+}
+
+    [HttpPost("bulk")]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> CreateBulk([FromBody] BulkMeterReadingDto dto)
+    {
+     var userId = GetCurrentUserId();
+  var result = await _meterReadingService.CreateBulkAsync(dto, userId);
+        if (!result.Success)
+        {
+      return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+  public async Task<IActionResult> Update(int id, [FromBody] UpdateMeterReadingDto dto)
+    {
+        var result = await _meterReadingService.UpdateAsync(id, dto);
+        if (!result.Success)
+        {
+    return BadRequest(result);
+  }
+      return Ok(result);
+    }
+
+[HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var result = await _meterReadingService.DeleteAsync(id);
+if (!result.Success)
+ {
+         return BadRequest(result);
+   }
+        return Ok(result);
+    }
+
+    private int GetCurrentUserId()
+    {
+  var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("userId");
+        return int.Parse(userIdClaim!.Value);
+    }
+}

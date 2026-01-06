@@ -1,0 +1,119 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace UtilityManagmentApi.DTOs.Bill;
+
+public class BillDto
+{
+    public int Id { get; set; }
+    public string BillNumber { get; set; } = string.Empty;
+    public int ConnectionId { get; set; }
+    public string ConnectionNumber { get; set; } = string.Empty;
+    public string MeterNumber { get; set; } = string.Empty;
+    public string ConsumerName { get; set; } = string.Empty;
+    public string ConsumerNumber { get; set; } = string.Empty;
+    public string UtilityType { get; set; } = string.Empty;
+    public string TariffPlan { get; set; } = string.Empty;
+    public int BillingMonth { get; set; }
+    public int BillingYear { get; set; }
+    public string BillingPeriod { get; set; } = string.Empty;
+    public DateOnly BillDate { get; set; }
+    public DateOnly DueDate { get; set; }
+    public decimal PreviousReading { get; set; }
+    public decimal CurrentReading { get; set; }
+    public decimal UnitsConsumed { get; set; }
+    public decimal RatePerUnit { get; set; }
+    public decimal EnergyCharges { get; set; }
+    public decimal FixedCharges { get; set; }
+    public decimal TaxAmount { get; set; }
+    public decimal PenaltyAmount { get; set; }
+    public decimal PreviousBalance { get; set; }
+    public decimal TotalAmount { get; set; }
+    public decimal AmountPaid { get; set; }
+    public decimal OutstandingBalance { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string? GeneratedByUserName { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public List<PaymentSummaryDto> Payments { get; set; } = new();
+}
+
+public class PaymentSummaryDto
+{
+    public int Id { get; set; }
+    public string PaymentNumber { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public DateTime PaymentDate { get; set; }
+    public string PaymentMethod { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+}
+
+public class GenerateBillDto
+{
+    [Required]
+    public int ConnectionId { get; set; }
+
+    [Required]
+    [Range(1, 12)]
+    public int BillingMonth { get; set; }
+
+    [Required]
+    [Range(2000, 2100)]
+    public int BillingYear { get; set; }
+
+    public int? MeterReadingId { get; set; }
+
+    /// <summary>
+    /// Optional due date for the bill. If not provided, defaults to 15 days from bill generation.
+    /// </summary>
+    public DateOnly? DueDate { get; set; }
+}
+
+public class GenerateBulkBillsDto
+{
+    [Required]
+    [Range(1, 12)]
+    public int BillingMonth { get; set; }
+
+    [Required]
+    [Range(2000, 2100)]
+    public int BillingYear { get; set; }
+
+    public List<int>? ConnectionIds { get; set; } // If null, generate for all connections with readings
+
+    /// <summary>
+    /// Optional due date for all generated bills. If not provided, defaults to 15 days from bill generation.
+    /// </summary>
+    public DateOnly? DueDate { get; set; }
+}
+
+public class BillListDto
+{
+    public int Id { get; set; }
+    public string BillNumber { get; set; } = string.Empty;
+    public string ConsumerName { get; set; } = string.Empty;
+    public string ConsumerNumber { get; set; } = string.Empty;
+    public string UtilityType { get; set; } = string.Empty;
+    public string BillingPeriod { get; set; } = string.Empty;
+    public DateOnly DueDate { get; set; }
+    public decimal TotalAmount { get; set; }
+    public decimal OutstandingBalance { get; set; }
+    public string Status { get; set; } = string.Empty;
+}
+
+public class UpdateBillStatusDto
+{
+    [Required]
+    public string Status { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? Notes { get; set; }
+}
+
+public class BillSummaryDto
+{
+    public int TotalBills { get; set; }
+    public decimal TotalBilledAmount { get; set; }
+    public decimal TotalCollected { get; set; }
+    public decimal TotalOutstanding { get; set; }
+    public int PaidBills { get; set; }
+    public int OverdueBills { get; set; }
+}

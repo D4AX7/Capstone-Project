@@ -1,0 +1,64 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using UtilityManagmentApi.DTOs.Notification;
+using UtilityManagmentApi.Services.Interfaces;
+using System.Security.Claims;
+
+namespace UtilityManagmentApi.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class NotificationsController : ControllerBase
+{
+ private readonly INotificationService _notificationService;
+
+    public NotificationsController(INotificationService notificationService)
+    {
+  _notificationService = notificationService;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetMyNotifications([FromQuery] bool? isRead = null)
+{
+        var userId = GetCurrentUserId();
+      var result = await _notificationService.GetByUserIdAsync(userId, isRead);
+        return Ok(result);
+    }
+
+ [HttpPut("{id}/read")]
+    public async Task<IActionResult> MarkAsRead(int id)
+    {
+ var result = await _notificationService.MarkAsReadAsync(id);
+        if (!result.Success)
+        {
+   return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+  [HttpPut("read-all")]
+    public async Task<IActionResult> MarkAllAsRead()
+  {
+        var userId = GetCurrentUserId();
+  var result = await _notificationService.MarkAllAsReadAsync(userId);
+return Ok(result);
+}
+
+[HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+ {
+     var result = await _notificationService.DeleteAsync(id);
+    if (!result.Success)
+  {
+   return BadRequest(result);
+        }
+      return Ok(result);
+    }
+
+    private int GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("userId");
+        return int.Parse(userIdClaim!.Value);
+    }
+}

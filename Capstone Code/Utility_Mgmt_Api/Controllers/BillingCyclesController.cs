@@ -1,0 +1,97 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using UtilityManagmentApi.DTOs.BillingCycle;
+using UtilityManagmentApi.Services.Interfaces;
+using System.Security.Claims;
+
+namespace UtilityManagmentApi.Controllers;
+
+/// <summary>
+/// Billing Cycles Controller - Admin manages cycles, BillingOfficer reads for their work
+/// </summary>
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class BillingCyclesController : ControllerBase
+{
+    private readonly IBillingCycleService _billingCycleService;
+
+    public BillingCyclesController(IBillingCycleService billingCycleService)
+    {
+        _billingCycleService = billingCycleService;
+    }
+
+    /// <summary>
+    /// Get All Billing Cycles - Admin (manages), BillingOfficer (needs for readings)
+    /// Billing Cycle Count in Admin Dashboard, Billing cycles (Jan, Feb, Mar) shown inside Generate Bills form inside single/bulk generate.
+    /// </summary>
+    [HttpGet]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> GetAll([FromQuery] int? year = null)
+    {
+        var result = await _billingCycleService.GetAllAsync(year);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Current Billing Cycle - Admin, BillingOfficer (needs for current readings)
+    /// </summary>
+    [HttpGet("current")]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> GetCurrentCycle()
+    {
+        var result = await _billingCycleService.GetCurrentCycleAsync();
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Create Billing Cycle - Admin only (manages billing cycles)
+    /// </summary>
+    //[HttpPost]
+    //[Authorize(Roles = "Admin")]
+    //public async Task<IActionResult> Create([FromBody] CreateBillingCycleDto dto)
+    //{
+    //    var userId = GetCurrentUserId();
+    //    var result = await _billingCycleService.CreateAsync(dto, userId);
+    //    if (!result.Success)
+    //    {
+    //        return BadRequest(result);
+    //    }
+    //    return Ok(result);
+    //}
+
+    /// <summary>
+    /// Update Billing Cycle - Admin only
+    /// </summary>
+    //[HttpPut("{id}")]
+    //[Authorize(Roles = "Admin")]
+    //public async Task<IActionResult> Update(int id, [FromBody] UpdateBillingCycleDto dto)
+    //{
+    //    var result = await _billingCycleService.UpdateAsync(id, dto);
+    //    if (!result.Success)
+    //    {
+    //        return BadRequest(result);
+    //    }
+    //    return Ok(result);
+    //}
+
+    /// <summary>
+    /// Delete Billing Cycle - Admin only
+    /// </summary>
+    //[HttpDelete("{id}")]
+    //[Authorize(Roles = "Admin")]
+    //public async Task<IActionResult> Delete(int id)
+    //{
+    //    var result = await _billingCycleService.DeleteAsync(id);
+    //    if (!result.Success)
+    //    {
+    //        return BadRequest(result);
+    //    }
+    //    return Ok(result);
+    //}
+
+}

@@ -1,0 +1,28 @@
+﻿using UtilityManagmentApi.DTOs.Admin;
+using UtilityManagmentApi.DTOs.Common;
+
+namespace UtilityManagmentApi.Services.Interfaces;
+
+public interface IAdminService
+{
+    // Dashboard
+    Task<ApiResponse<AdminDashboardDto>> GetAdminDashboardAsync();
+    Task<ApiResponse<List<RecentActivityDto>>> GetRecentActivityAsync(int count = 10);
+
+    // System Settings
+    Task<ApiResponse<List<SystemSettingsDto>>> GetAllSettingsAsync(string? category = null);
+    Task<ApiResponse<SystemSettingsDto>> GetSettingByKeyAsync(string key);
+    Task<ApiResponse<SystemSettingsDto>> CreateSettingAsync(CreateSystemSettingDto dto, int userId);
+    Task<ApiResponse<SystemSettingsDto>> UpdateSettingAsync(string key, UpdateSystemSettingDto dto, int userId);
+    Task<ApiResponse<bool>> DeleteSettingAsync(string key);
+
+    // Audit Logs
+    Task<PagedResponse<AuditLogListDto>> GetAuditLogsAsync(
+PaginationParams paginationParams,
+        string? entityType = null,
+  string? action = null,
+     DateTime? fromDate = null,
+  DateTime? toDate = null);
+    Task<ApiResponse<AuditLogDto>> GetAuditLogByIdAsync(int id);
+    Task LogActivityAsync(string action, string entityType, int? entityId, int userId, string? oldValues = null, string? newValues = null, string? ipAddress = null);
+}

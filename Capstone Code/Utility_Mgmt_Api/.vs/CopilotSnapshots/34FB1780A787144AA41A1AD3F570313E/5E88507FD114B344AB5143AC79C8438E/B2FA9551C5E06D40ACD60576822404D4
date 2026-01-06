@@ -1,0 +1,84 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace UtilityManagmentApi.DTOs.MeterReading;
+
+public class MeterReadingDto
+{
+    public int Id { get; set; }
+    public int ConnectionId { get; set; }
+    public string ConnectionNumber { get; set; } = string.Empty;
+    public string MeterNumber { get; set; } = string.Empty;
+    public string ConsumerName { get; set; } = string.Empty;
+    public string UtilityType { get; set; } = string.Empty;
+    public decimal PreviousReading { get; set; }
+    public decimal CurrentReading { get; set; }
+    public decimal UnitsConsumed { get; set; }
+    public DateTime ReadingDate { get; set; }
+    public int BillingMonth { get; set; }
+    public int BillingYear { get; set; }
+    public string? ReadByUserName { get; set; }
+    public string? Notes { get; set; }
+    public bool IsEstimated { get; set; }
+    public bool IsBilled { get; set; }
+    public string Status { get; set; } = string.Empty;
+}
+
+public class CreateMeterReadingDto
+{
+[Required]
+    public int ConnectionId { get; set; }
+
+    [Required]
+    [Range(0, double.MaxValue)]
+    public decimal CurrentReading { get; set; }
+
+    public DateTime? ReadingDate { get; set; }
+
+[Required]
+    [Range(1, 12)]
+    public int BillingMonth { get; set; }
+
+    [Required]
+ [Range(2000, 2100)]
+    public int BillingYear { get; set; }
+
+    [MaxLength(500)]
+    public string? Notes { get; set; }
+
+    public bool IsEstimated { get; set; } = false;
+}
+
+public class UpdateMeterReadingDto
+{
+    [Range(0, double.MaxValue)]
+    public decimal? CurrentReading { get; set; }
+
+    public DateTime? ReadingDate { get; set; }
+
+    [MaxLength(500)]
+    public string? Notes { get; set; }
+
+    public bool? IsEstimated { get; set; }
+}
+
+public class MeterReadingListDto
+{
+    public int Id { get; set; }
+    public string ConnectionNumber { get; set; } = string.Empty;
+    public string MeterNumber { get; set; } = string.Empty;
+    public string ConsumerName { get; set; } = string.Empty;
+    public decimal PreviousReading { get; set; }
+    public decimal CurrentReading { get; set; }
+    public decimal UnitsConsumed { get; set; }
+    public DateTime ReadingDate { get; set; }
+    public int BillingMonth { get; set; }
+    public int BillingYear { get; set; }
+    public bool IsBilled { get; set; }
+    public string Status { get; set; } = string.Empty;
+}
+
+public class BulkMeterReadingDto
+{
+    [Required]
+    public List<CreateMeterReadingDto> Readings { get; set; } = new();
+}

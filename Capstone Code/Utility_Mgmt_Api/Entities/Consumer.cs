@@ -1,0 +1,44 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace UtilityManagmentApi.Entities;
+
+public class Consumer
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    public int UserId { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string ConsumerNumber { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(500)]
+    public string Address { get; set; } = string.Empty;
+
+    [MaxLength(100)]
+    public string City { get; set; } = string.Empty;
+
+    [MaxLength(100)]
+    public string State { get; set; } = string.Empty;
+
+    [MaxLength(20)]
+    public string PostalCode { get; set; } = string.Empty;
+
+    public DateTime RegistrationDate { get; set; } = DateTime.UtcNow;
+
+    public bool IsActive { get; set; } = true;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAt { get; set; }
+
+    // Navigation properties
+    [ForeignKey("UserId")]
+    public ApplicationUser User { get; set; } = null!;
+
+    public ICollection<Connection> Connections { get; set; } = new List<Connection>();
+}

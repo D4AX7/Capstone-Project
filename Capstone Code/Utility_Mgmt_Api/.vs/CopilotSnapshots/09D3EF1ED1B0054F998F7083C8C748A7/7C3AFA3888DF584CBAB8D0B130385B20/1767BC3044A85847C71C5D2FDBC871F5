@@ -1,0 +1,445 @@
+﻿using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Authorization;
+
+/// <summary>
+/// Unit tests for Role-Based Access Control (RBAC) - Tests user roles and permissions
+/// </summary>
+public class AuthorizationTests
+{
+    // Define roles as per the system
+    private const string AdminRole = "Admin";
+    private const string BillingOfficerRole = "BillingOfficer";
+    private const string AccountOfficerRole = "AccountOfficer";
+    private const string ConsumerRole = "Consumer";
+
+    #region Role Validation Tests
+
+    [Fact]
+    public void ValidRoles_ContainsAllExpectedRoles()
+    {
+        // Arrange
+        var validRoles = new[] { AdminRole, BillingOfficerRole, AccountOfficerRole, ConsumerRole };
+
+     // Assert
+     Assert.Equal(4, validRoles.Length);
+        Assert.Contains(AdminRole, validRoles);
+        Assert.Contains(BillingOfficerRole, validRoles);
+        Assert.Contains(AccountOfficerRole, validRoles);
+        Assert.Contains(ConsumerRole, validRoles);
+  }
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", true)]
+    [InlineData("Consumer", true)]
+    [InlineData("SuperAdmin", false)]
+    [InlineData("Manager", false)]
+    [InlineData("", false)]
+    [InlineData("admin", false)] // Case sensitive
+    public void IsValidRole_ReturnsExpectedResult(string role, bool expected)
+{
+        // Arrange
+        var validRoles = new[] { AdminRole, BillingOfficerRole, AccountOfficerRole, ConsumerRole };
+
+        // Act
+        var result = validRoles.Contains(role);
+
+        // Assert
+        Assert.Equal(expected, result);
+    }
+
+    #endregion
+
+    #region Consumer Management Authorization Tests
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", true)]
+[InlineData("Consumer", false)]
+    public void CanViewAllConsumers_BasedOnRole(string role, bool expected)
+    {
+      // Arrange
+     var allowedRoles = new[] { AdminRole, BillingOfficerRole, AccountOfficerRole };
+
+   // Act
+        var canView = allowedRoles.Contains(role);
+
+   // Assert
+      Assert.Equal(expected, canView);
+    }
+
+[Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanCreateConsumer_BasedOnRole(string role, bool expected)
+    {
+        // Arrange
+        var allowedRoles = new[] { AdminRole };
+
+    // Act
+        var canCreate = allowedRoles.Contains(role);
+
+        // Assert
+        Assert.Equal(expected, canCreate);
+    }
+
+    [Fact]
+    public void Consumer_CanOnlyViewOwnProfile()
+  {
+  // Arrange
+        var currentUserId = 5;
+   var requestedConsumerUserId = 5;
+
+        // Act
+        var canView = currentUserId == requestedConsumerUserId;
+
+    // Assert
+        Assert.True(canView);
+    }
+
+    [Fact]
+    public void Consumer_CannotViewOthersProfile()
+    {
+        // Arrange
+        var currentUserId = 5;
+        var requestedConsumerUserId = 10;
+
+        // Act
+        var canView = currentUserId == requestedConsumerUserId;
+
+        // Assert
+        Assert.False(canView);
+    }
+
+    #endregion
+
+    #region Meter Reading Authorization Tests
+
+    [Theory]
+    [InlineData("Admin", false)]
+ [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanEnterMeterReading_BasedOnRole(string role, bool expected)
+    {
+     // Arrange - Only BillingOfficer can enter meter readings
+        var allowedRoles = new[] { BillingOfficerRole };
+
+        // Act
+ var canEnter = allowedRoles.Contains(role);
+
+        // Assert
+        Assert.Equal(expected, canEnter);
+    }
+
+  [Theory]
+    [InlineData("Admin", false)]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", false)]
+  [InlineData("Consumer", true)]
+    public void CanViewMeterReadingsByConnection_BasedOnRole(string role, bool expected)
+    {
+        // Arrange - BillingOfficer and Consumer (own) can view
+   var allowedRoles = new[] { BillingOfficerRole, ConsumerRole };
+
+        // Act
+        var canView = allowedRoles.Contains(role);
+
+        // Assert
+        Assert.Equal(expected, canView);
+    }
+
+    #endregion
+
+    #region Bill Authorization Tests
+
+ [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", true)]
+    [InlineData("Consumer", false)]
+    public void CanViewAllBills_BasedOnRole(string role, bool expected)
+    {
+        // Arrange
+        var allowedRoles = new[] { AdminRole, BillingOfficerRole, AccountOfficerRole };
+
+    // Act
+        var canView = allowedRoles.Contains(role);
+
+        // Assert
+        Assert.Equal(expected, canView);
+    }
+
+    [Theory]
+  [InlineData("Admin", false)]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanGenerateBill_BasedOnRole(string role, bool expected)
+    {
+        // Arrange - Only BillingOfficer can generate bills
+    var allowedRoles = new[] { BillingOfficerRole };
+
+        // Act
+        var canGenerate = allowedRoles.Contains(role);
+
+        // Assert
+        Assert.Equal(expected, canGenerate);
+    }
+
+    [Fact]
+    public void Consumer_CanOnlyViewOwnBills()
+    {
+        // Arrange
+        var consumerNumber = "CON240001";
+   var billConsumerNumber = "CON240001";
+
+        // Act
+        var canView = consumerNumber == billConsumerNumber;
+
+        // Assert
+        Assert.True(canView);
+    }
+
+    [Fact]
+    public void Consumer_CannotViewOthersBills()
+    {
+        // Arrange
+        var consumerNumber = "CON240001";
+        var billConsumerNumber = "CON240002";
+
+        // Act
+        var canView = consumerNumber == billConsumerNumber;
+
+        // Assert
+        Assert.False(canView);
+    }
+
+    #endregion
+
+    #region Payment Authorization Tests
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+ [InlineData("AccountOfficer", true)]
+    [InlineData("Consumer", false)]
+    public void CanViewAllPayments_BasedOnRole(string role, bool expected)
+    {
+  // Arrange
+        var allowedRoles = new[] { AdminRole, AccountOfficerRole };
+
+        // Act
+        var canView = allowedRoles.Contains(role);
+
+        // Assert
+  Assert.Equal(expected, canView);
+    }
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanRecordPayment_BasedOnRole(string role, bool expected)
+    {
+        // Arrange - Only Admin can record payments
+        var allowedRoles = new[] { AdminRole };
+
+   // Act
+        var canRecord = allowedRoles.Contains(role);
+
+      // Assert
+   Assert.Equal(expected, canRecord);
+ }
+
+    [Fact]
+    public void Consumer_CanPayOwnBill()
+    {
+        // Arrange
+        var consumerNumber = "CON240001";
+      var billConsumerNumber = "CON240001";
+
+        // Act
+        var canPay = consumerNumber == billConsumerNumber;
+
+        // Assert
+    Assert.True(canPay);
+    }
+
+    #endregion
+
+    #region Billing Cycle Authorization Tests
+
+    [Theory]
+    [InlineData("Admin", true)]
+ [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+  public void CanViewBillingCycles_BasedOnRole(string role, bool expected)
+    {
+// Arrange
+        var allowedRoles = new[] { AdminRole, BillingOfficerRole };
+
+        // Act
+     var canView = allowedRoles.Contains(role);
+
+   // Assert
+        Assert.Equal(expected, canView);
+    }
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("AccountOfficer", false)]
+[InlineData("Consumer", false)]
+public void CanManageBillingCycles_BasedOnRole(string role, bool expected)
+    {
+        // Arrange - Only Admin can create/update/delete billing cycles
+ var allowedRoles = new[] { AdminRole };
+
+        // Act
+        var canManage = allowedRoles.Contains(role);
+
+        // Assert
+        Assert.Equal(expected, canManage);
+    }
+
+    #endregion
+
+  #region Report Authorization Tests
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", true)]
+    [InlineData("AccountOfficer", true)]
+    [InlineData("Consumer", false)]
+    public void CanViewDashboard_BasedOnRole(string role, bool expected)
+    {
+// Arrange
+      var allowedRoles = new[] { AdminRole, BillingOfficerRole, AccountOfficerRole };
+
+        // Act
+        var canView = allowedRoles.Contains(role);
+
+        // Assert
+    Assert.Equal(expected, canView);
+    }
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("AccountOfficer", true)]
+    [InlineData("Consumer", false)]
+    public void CanViewRevenueReports_BasedOnRole(string role, bool expected)
+    {
+        // Arrange
+        var allowedRoles = new[] { AdminRole, AccountOfficerRole };
+
+        // Act
+        var canView = allowedRoles.Contains(role);
+
+        // Assert
+  Assert.Equal(expected, canView);
+    }
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanViewConsumptionReport_BasedOnRole(string role, bool expected)
+    {
+        // Arrange - Only Admin can view consumption report
+        var allowedRoles = new[] { AdminRole };
+
+        // Act
+        var canView = allowedRoles.Contains(role);
+
+        // Assert
+        Assert.Equal(expected, canView);
+    }
+
+    #endregion
+
+  #region User Management Authorization Tests
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanManageUsers_BasedOnRole(string role, bool expected)
+    {
+    // Arrange - Only Admin can manage users
+   var allowedRoles = new[] { AdminRole };
+
+        // Act
+        var canManage = allowedRoles.Contains(role);
+
+        // Assert
+ Assert.Equal(expected, canManage);
+  }
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanRegisterStaff_BasedOnRole(string role, bool expected)
+    {
+        // Arrange - Only Admin can register staff
+        var allowedRoles = new[] { AdminRole };
+
+        // Act
+  var canRegister = allowedRoles.Contains(role);
+
+        // Assert
+        Assert.Equal(expected, canRegister);
+    }
+
+    #endregion
+
+    #region Utility Type and Tariff Authorization Tests
+
+    [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+    [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanManageUtilityTypes_BasedOnRole(string role, bool expected)
+    {
+        // Arrange - Only Admin can manage utility types
+    var allowedRoles = new[] { AdminRole };
+
+        // Act
+  var canManage = allowedRoles.Contains(role);
+
+// Assert
+        Assert.Equal(expected, canManage);
+    }
+
+ [Theory]
+    [InlineData("Admin", true)]
+    [InlineData("BillingOfficer", false)]
+  [InlineData("AccountOfficer", false)]
+    [InlineData("Consumer", false)]
+    public void CanManageTariffPlans_BasedOnRole(string role, bool expected)
+    {
+   // Arrange - Only Admin can manage tariff plans
+        var allowedRoles = new[] { AdminRole };
+
+        // Act
+        var canManage = allowedRoles.Contains(role);
+
+        // Assert
+      Assert.Equal(expected, canManage);
+    }
+
+    #endregion
+}

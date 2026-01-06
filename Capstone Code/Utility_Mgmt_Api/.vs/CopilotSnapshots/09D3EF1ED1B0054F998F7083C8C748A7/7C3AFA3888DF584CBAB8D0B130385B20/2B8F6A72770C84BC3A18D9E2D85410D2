@@ -1,0 +1,265 @@
+﻿using UtilityManagmentApi.DTOs.Common;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.DTOs;
+
+/// <summary>
+/// Unit tests for API Response DTOs - Tests response structure and pagination
+/// </summary>
+public class ApiResponseTests
+{
+  #region ApiResponse Success Tests
+
+    [Fact]
+    public void SuccessResponse_WithData_ReturnsSuccessTrue()
+    {
+        // Arrange
+        var data = new TestDto { Id = 1, Name = "Test" };
+
+ // Act
+        var response = ApiResponse<TestDto>.SuccessResponse(data);
+
+        // Assert
+        Assert.True(response.Success);
+        Assert.Equal("Success", response.Message);
+Assert.NotNull(response.Data);
+        Assert.Equal(1, response.Data.Id);
+    }
+
+    [Fact]
+    public void SuccessResponse_WithCustomMessage_ReturnsCorrectMessage()
+    {
+        // Arrange
+        var data = new TestDto { Id = 1, Name = "Test" };
+     var customMessage = "Operation completed successfully";
+
+      // Act
+        var response = ApiResponse<TestDto>.SuccessResponse(data, customMessage);
+
+        // Assert
+        Assert.True(response.Success);
+    Assert.Equal(customMessage, response.Message);
+    }
+
+    [Fact]
+    public void SuccessResponse_WithList_ReturnsListData()
+    {
+// Arrange
+        var data = new List<TestDto>
+  {
+            new TestDto { Id = 1, Name = "Test1" },
+          new TestDto { Id = 2, Name = "Test2" }
+    };
+
+        // Act
+        var response = ApiResponse<List<TestDto>>.SuccessResponse(data);
+
+        // Assert
+        Assert.True(response.Success);
+        Assert.NotNull(response.Data);
+        Assert.Equal(2, response.Data.Count);
+    }
+
+    #endregion
+
+    #region ApiResponse Error Tests
+
+    [Fact]
+    public void ErrorResponse_WithMessage_ReturnsSuccessFalse()
+    {
+        // Arrange
+        var errorMessage = "An error occurred";
+
+        // Act
+        var response = ApiResponse<TestDto>.ErrorResponse(errorMessage);
+
+        // Assert
+        Assert.False(response.Success);
+        Assert.Equal(errorMessage, response.Message);
+    Assert.Null(response.Data);
+    }
+
+    [Fact]
+    public void ErrorResponse_WithErrors_ReturnsErrorsList()
+    {
+        // Arrange
+    var errorMessage = "Validation failed";
+  var errors = new List<string>
+  {
+        "Field1 is required",
+            "Field2 must be positive"
+        };
+
+        // Act
+    var response = ApiResponse<TestDto>.ErrorResponse(errorMessage, errors);
+
+        // Assert
+        Assert.False(response.Success);
+   Assert.Equal(errorMessage, response.Message);
+        Assert.NotNull(response.Errors);
+        Assert.Equal(2, response.Errors.Count);
+    }
+
+    #endregion
+
+    #region PagedResponse Tests
+
+    [Fact]
+    public void PagedResponse_WithValidData_ReturnsCorrectPagination()
+    {
+        // Arrange
+        var data = new List<TestDto>
+        {
+    new TestDto { Id = 1, Name = "Test1" },
+   new TestDto { Id = 2, Name = "Test2" }
+      };
+
+        // Act
+        var response = new PagedResponse<TestDto>
+        {
+            Data = data,
+      PageNumber = 1,
+            PageSize = 10,
+  TotalRecords = 50,
+     TotalPages = 5
+    };
+
+        // Assert
+        Assert.True(response.Success);
+        Assert.Equal(2, response.Data.Count);
+        Assert.Equal(1, response.PageNumber);
+        Assert.Equal(10, response.PageSize);
+        Assert.Equal(50, response.TotalRecords);
+   Assert.Equal(5, response.TotalPages);
+    }
+
+[Fact]
+    public void PagedResponse_OnFirstPage_HasNoNextAndHasPrevious()
+    {
+        // Arrange & Act
+  var response = new PagedResponse<TestDto>
+      {
+            PageNumber = 1,
+         TotalPages = 5
+        };
+
+        // Assert
+        Assert.False(response.HasPrevious);
+        Assert.True(response.HasNext);
+    }
+
+[Fact]
+    public void PagedResponse_OnMiddlePage_HasBothPreviousAndNext()
+    {
+        // Arrange & Act
+        var response = new PagedResponse<TestDto>
+        {
+     PageNumber = 3,
+        TotalPages = 5
+        };
+
+        // Assert
+        Assert.True(response.HasPrevious);
+        Assert.True(response.HasNext);
+ }
+
+    [Fact]
+    public void PagedResponse_OnLastPage_HasPreviousAndNoNext()
+    {
+        // Arrange & Act
+        var response = new PagedResponse<TestDto>
+        {
+          PageNumber = 5,
+            TotalPages = 5
+     };
+
+     // Assert
+        Assert.True(response.HasPrevious);
+      Assert.False(response.HasNext);
+    }
+
+    [Fact]
+    public void PagedResponse_SinglePage_HasNoPreviousOrNext()
+    {
+        // Arrange & Act
+        var response = new PagedResponse<TestDto>
+        {
+     PageNumber = 1,
+            TotalPages = 1
+        };
+
+        // Assert
+Assert.False(response.HasPrevious);
+        Assert.False(response.HasNext);
+    }
+
+    #endregion
+
+    #region PaginationParams Tests
+
+    [Fact]
+    public void PaginationParams_DefaultValues_AreCorrect()
+    {
+        // Arrange & Act
+        var paginationParams = new PaginationParams();
+
+        // Assert
+     Assert.Equal(1, paginationParams.PageNumber);
+        Assert.Equal(10, paginationParams.PageSize);
+        Assert.Null(paginationParams.SearchTerm);
+        Assert.Null(paginationParams.SortBy);
+        Assert.False(paginationParams.SortDescending);
+    }
+
+    [Fact]
+    public void PaginationParams_WithLargePageSize_LimitsToMaxPageSize()
+    {
+    // Arrange
+        var paginationParams = new PaginationParams();
+
+  // Act
+    paginationParams.PageSize = 200; // Exceeds MaxPageSize of 100
+
+        // Assert
+        Assert.Equal(100, paginationParams.PageSize);
+    }
+
+    [Fact]
+    public void PaginationParams_WithValidPageSize_SetsCorrectly()
+{
+        // Arrange
+ var paginationParams = new PaginationParams();
+
+// Act
+   paginationParams.PageSize = 50;
+
+        // Assert
+        Assert.Equal(50, paginationParams.PageSize);
+    }
+
+    [Fact]
+    public void PaginationParams_WithSearchTerm_SetsCorrectly()
+    {
+        // Arrange & Act
+     var paginationParams = new PaginationParams
+        {
+            SearchTerm = "Michael",
+        SortBy = "Name",
+ SortDescending = true
+        };
+
+        // Assert
+        Assert.Equal("Michael", paginationParams.SearchTerm);
+        Assert.Equal("Name", paginationParams.SortBy);
+        Assert.True(paginationParams.SortDescending);
+    }
+
+    #endregion
+
+    // Helper test DTO
+    private class TestDto
+    {
+        public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    }
+}

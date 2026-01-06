@@ -1,0 +1,161 @@
+﻿using UtilityManagmentApi.DTOs.MeterReading;
+using UtilityManagmentApi.Entities;
+using UtilityManagmentApi.Services.Implementations;
+using UtilityManagmentApi.Tests.Helpers;
+
+namespace UtilityManagmentApi.Tests.Services;
+
+public class MeterReadingServiceTests
+{
+    [Fact]
+  public async Task CreateAsync_ValidReading_CreatesSuccessfully()
+ {
+    // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("MeterReadingTest_Create");
+      await TestDbContextFactory.SeedTestDataAsync(context);
+      var service = new MeterReadingService(context);
+
+        var dto = new CreateMeterReadingDto
+   {
+  ConnectionId = 1,
+    CurrentReading = 2000,
+         BillingMonth = DateTime.UtcNow.AddMonths(1).Month,
+          BillingYear = DateTime.UtcNow.AddMonths(1).Month == 1 
+     ? DateTime.UtcNow.Year + 1 
+       : DateTime.UtcNow.Year
+      };
+
+        // Act
+        var result = await service.CreateAsync(dto, 2);
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+ Assert.Equal(2000, result.Data.CurrentReading);
+    }
+
+  [Fact]
+    public async Task CreateAsync_CurrentLessThanPrevious_ReturnsError()
+  {
+ // Arrange
+     var context = TestDbContextFactory.CreateInMemoryContext("MeterReadingTest_InvalidReading");
+    await TestDbContextFactory.SeedTestDataAsync(context);
+  var service = new MeterReadingService(context);
+
+        // First add a reading with value 1500
+        await service.CreateAsync(new CreateMeterReadingDto
+    {
+  ConnectionId = 1,
+  CurrentReading = 1500,
+ BillingMonth = 1,
+ BillingYear = 2025
+        }, 2);
+
+        // Try to add a reading with lower value
+  var dto = new CreateMeterReadingDto
+   {
+    ConnectionId = 1,
+     CurrentReading = 1000, // Less than previous
+   BillingMonth = 2,
+     BillingYear = 2025
+    };
+
+    // Act
+    var result = await service.CreateAsync(dto, 2);
+
+   // Assert
+ Assert.False(result.Success);
+        Assert.Contains("cannot be less than previous reading", result.Message);
+    }
+
+    [Fact]
+  public async Task CreateAsync_DuplicatePeriod_ReturnsError()
+    {
+  // Arrange
+   var context = TestDbContextFactory.CreateInMemoryContext("MeterReadingTest_Duplicate");
+ await TestDbContextFactory.SeedTestDataAsync(context);
+   var service = new MeterReadingService(context);
+
+ var dto = new CreateMeterReadingDto
+   {
+   ConnectionId = 1,
+       CurrentReading = 2000,
+   BillingMonth = DateTime.UtcNow.Month,
+  BillingYear = DateTime.UtcNow.Year
+    };
+
+        // Create first reading
+        await service.CreateAsync(dto, 2);
+
+        // Act - try to create duplicate
+        var result = await service.CreateAsync(dto, 2);
+
+        // Assert
+        Assert.False(result.Success);
+   Assert.Contains("already exists", result.Message);
+    }
+
+    [Fact]
+    public async Task GetByConnectionIdAsync_ReturnsReadingsForConnection()
+ {
+        // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("MeterReadingTest_GetByConnection");
+   await TestDbContextFactory.SeedTestDataAsync(context);
+  var service = new MeterReadingService(context);
+
+        // Act
+        var result = await service.GetByConnectionIdAsync(1);
+
+     // Assert
+        Assert.True(result.Success);
+    Assert.NotNull(result.Data);
+  Assert.True(result.Data.Count >= 1);
+ }
+
+ [Fact]
+    public async Task GetLastReadingAsync_ReturnsCorrectValue()
+    {
+      // Arrange
+     var context = TestDbContextFactory.CreateInMemoryContext("MeterReadingTest_GetLast");
+  await TestDbContextFactory.SeedTestDataAsync(context);
+        var service = new MeterReadingService(context);
+
+        // Act
+        var result = await service.GetLastReadingAsync(1);
+
+        // Assert
+        Assert.True(result.Success);
+   Assert.Equal(1500, result.Data); // From seed data
+  }
+
+    [Fact]
+    public async Task CreateBulkAsync_ValidReadings_CreatesAll()
+    {
+    // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("MeterReadingTest_Bulk");
+  await TestDbContextFactory.SeedTestDataAsync(context);
+        var service = new MeterReadingService(context);
+
+        var dto = new BulkMeterReadingDto
+        {
+   Readings = new List<CreateMeterReadingDto>
+    {
+    new CreateMeterReadingDto
+    {
+   ConnectionId = 1,
+        CurrentReading = 2000,
+         BillingMonth = 3,
+         BillingYear = 2025
+    }
+         }
+      };
+
+        // Act
+     var result = await service.CreateBulkAsync(dto, 2);
+
+     // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+  Assert.Single(result.Data);
+    }
+}

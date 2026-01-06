@@ -1,0 +1,267 @@
+﻿# Utility Billing System - Backend API
+
+A comprehensive ASP.NET Core Web API for managing utility billing operations including consumer management, meter readings, billing, payments, and reporting.
+
+## 🚀 Features
+
+### Core Modules
+- **User & Security Management**: JWT-based authentication with role-based access control (RBAC)
+- **Consumer & Connection Management**: Consumer registration, profile management, and utility connections
+- **Meter Reading Management**: Monthly meter reading entry with validation
+- **Billing & Invoice Generation**: Auto bill generation based on consumption and tariff
+- **Payment Tracking**: Record payments with multiple payment methods
+- **Reports & Dashboards**: Revenue, consumption, and outstanding dues reports
+- **Notifications**: Bill generation and payment notifications
+
+### User Roles
+1. **Admin**: Full system access - manage users, utility types, tariffs, and billing cycles
+2. **Billing Officer**: Enter meter readings and generate bills
+3. **Account Officer**: Track payments and outstanding balances
+4. **Consumer**: View bills, payment history, and consumption details
+
+## 🛠️ Technology Stack
+
+- **.NET 9** - Latest .NET framework
+- **Entity Framework Core 9** - ORM for database operations
+- **SQL Server** - Database (LocalDB for development)
+- **JWT Authentication** - Secure API authentication
+- **BCrypt** - Password hashing
+- **Swagger/OpenAPI** - API documentation
+
+## 📋 Prerequisites
+
+- .NET 9 SDK
+- SQL Server (LocalDB or full instance)
+- Visual Studio 2022 or VS Code
+
+## ⚙️ Setup Instructions
+
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd UtilityManagmentApi
+```
+
+### 2. Update Connection String
+Edit `appsettings.json` to configure your database connection:
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=UtilityBillingDb;Trusted_Connection=True;"
+  }
+}
+```
+
+### 3. Run the Application
+```bash
+dotnet run
+```
+
+The API will start and automatically create the database with seed data.
+
+### 4. Access Swagger UI
+Navigate to `https://localhost:<port>/` to access the Swagger documentation.
+
+## 🔐 Default Admin Credentials
+
+```
+Email: admin@utilitybilling.com
+Password: Admin@123
+```
+
+## 📁 Project Structure
+
+```
+UtilityManagmentApi/
+├── Controllers/      # API Controllers
+│   ├── AuthController.cs
+│   ├── ConsumersController.cs
+│   ├── ConnectionsController.cs
+│   ├── UtilityTypesController.cs
+│   ├── TariffPlansController.cs
+│   ├── MeterReadingsController.cs
+│ ├── BillsController.cs
+│   ├── PaymentsController.cs
+│   ├── BillingCyclesController.cs
+│   ├── NotificationsController.cs
+│   └── ReportsController.cs
+├── Data/
+│   └── ApplicationDbContext.cs   # EF Core DbContext with seed data
+├── DTOs/        # Data Transfer Objects
+│   ├── Auth/
+│   ├── Bill/
+│   ├── BillingCycle/
+│   ├── Common/
+│   ├── Connection/
+│   ├── Consumer/
+│   ├── MeterReading/
+│   ├── Notification/
+│   ├── Payment/
+│   ├── Reports/
+│   ├── TariffPlan/
+│   └── UtilityType/
+├── Entities/          # Domain Entities
+│   ├── User.cs
+│   ├── Consumer.cs
+│   ├── Connection.cs
+│   ├── UtilityType.cs
+│   ├── TariffPlan.cs
+│   ├── MeterReading.cs
+│   ├── Bill.cs
+│   ├── Payment.cs
+│   ├── BillingCycle.cs
+│   └── Notification.cs
+├── Middleware/
+│   └── ExceptionHandlingMiddleware.cs
+├── Services/
+│   ├── Interfaces/        # Service Interfaces
+│   └── Implementations/   # Service Implementations
+├── Program.cs
+└── appsettings.json
+```
+
+## 🔌 API Endpoints
+
+### Authentication
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| POST | `/api/auth/login` | User login | No |
+| POST | `/api/auth/register` | Register new user | Admin |
+| POST | `/api/auth/change-password` | Change password | Yes |
+| GET | `/api/auth/me` | Get current user | Yes |
+| GET | `/api/auth/users` | Get all users | Admin |
+
+### Consumers
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/api/consumers` | Get all consumers | Admin, Billing, Account |
+| GET | `/api/consumers/{id}` | Get consumer by ID | Yes |
+| POST | `/api/consumers` | Create consumer | Admin, Billing |
+| PUT | `/api/consumers/{id}` | Update consumer | Admin, Billing |
+| DELETE | `/api/consumers/{id}` | Delete consumer | Admin |
+
+### Connections
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/api/connections` | Get all connections | Admin, Billing, Account |
+| POST | `/api/connections` | Create connection | Admin, Billing |
+| GET | `/api/connections/pending-readings` | Get connections pending readings | Admin, Billing |
+
+### Meter Readings
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/api/meterreadings` | Get all readings | Admin, Billing |
+| POST | `/api/meterreadings` | Create reading | Admin, Billing |
+| POST | `/api/meterreadings/bulk` | Bulk create readings | Admin, Billing |
+| GET | `/api/meterreadings/unbilled` | Get unbilled readings | Admin, Billing |
+
+### Bills
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/api/bills` | Get all bills | Admin, Billing, Account |
+| POST | `/api/bills/generate` | Generate bill | Admin, Billing |
+| POST | `/api/bills/generate-bulk` | Bulk generate bills | Admin, Billing |
+| GET | `/api/bills/overdue` | Get overdue bills | Admin, Billing, Account |
+| GET | `/api/bills/my-bills` | Consumer's bills | Consumer |
+
+### Payments
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/api/payments` | Get all payments | Admin, Account |
+| POST | `/api/payments` | Record payment | Admin, Account |
+| GET | `/api/payments/summary` | Payment summary | Admin, Account |
+| GET | `/api/payments/my-payments` | Consumer's payments | Consumer |
+
+### Reports
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/api/reports/dashboard` | Dashboard summary | Admin, Billing, Account |
+| GET | `/api/reports/revenue/monthly` | Monthly revenue report | Admin, Account |
+| GET | `/api/reports/revenue/yearly` | Yearly revenue report | Admin, Account |
+| GET | `/api/reports/outstanding-dues` | Outstanding dues report | Admin, Account |
+| GET | `/api/reports/consumption` | Consumption report | Admin, Billing |
+| GET | `/api/reports/collection` | Collection report | Admin, Account |
+
+## 📊 Database Schema
+
+### Core Entities
+- **Users**: System users with roles
+- **Consumers**: Customer accounts linked to users
+- **Connections**: Utility connections for consumers
+- **UtilityTypes**: Types of utilities (Electricity, Water, Gas, Internet)
+- **TariffPlans**: Pricing plans for utilities
+- **MeterReadings**: Monthly consumption readings
+- **Bills**: Generated invoices
+- **Payments**: Payment records
+- **BillingCycles**: Monthly billing periods
+- **Notifications**: User notifications
+
+### Seed Data
+The database is seeded with:
+- 1 Admin user
+- 4 Utility types (Electricity, Water, Gas, Internet)
+- 5 Tariff plans
+
+## 🧪 Testing
+
+### Using Postman
+1. Import the API endpoints
+2. Login with admin credentials to get JWT token
+3. Add token to Authorization header: `Bearer <token>`
+
+### Sample Login Request
+```json
+POST /api/auth/login
+{
+  "email": "admin@utilitybilling.com",
+  "password": "Admin@123"
+}
+```
+
+## 📝 Bill Calculation Formula
+
+```
+Energy Charges = Units Consumed × Rate Per Unit
+Subtotal = Energy Charges + Fixed Charges
+Tax Amount = Subtotal × (Tax Percentage / 100)
+Total Amount = Subtotal + Tax Amount + Previous Balance + Penalty (if overdue)
+```
+
+## 🔄 Bill Lifecycle
+
+```
+Generated → Due → Paid
+         ↓
+       Partially Paid
+↓
+          Overdue (if past due date)
+```
+
+## 🛡️ Security Features
+
+- JWT token-based authentication
+- Role-based access control (RBAC)
+- Password hashing with BCrypt
+- Global exception handling
+- Input validation
+- Secure API endpoints
+
+## 📈 LINQ Queries Demonstrated
+
+- Filtering and sorting of bills
+- Aggregation queries for revenue reports
+- Outstanding dues calculations
+- Average consumption statistics
+- Monthly/yearly grouping
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit changes
+4. Push to the branch
+5. Open a Pull Request
+
+## 📄 License
+
+This project is for educational purposes as part of a Capstone Project.

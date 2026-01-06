@@ -1,0 +1,130 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Consumer;
+using UtilityManagmentApi.Services.Interfaces;
+using System.Security.Claims;
+
+namespace UtilityManagmentApi.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class ConsumersController : ControllerBase
+{
+    private readonly IConsumerService _consumerService;
+
+    public ConsumersController(IConsumerService consumerService)
+    {
+   _consumerService = consumerService;
+}
+
+    [HttpGet]
+    [Authorize(Roles = "Admin,BillingOfficer,AccountOfficer")]
+    public async Task<IActionResult> GetAll([FromQuery] PaginationParams paginationParams, [FromQuery] bool? isActive = null)
+    {
+        var result = await _consumerService.GetAllAsync(paginationParams, isActive);
+      return Ok(result);
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        // Consumers can only view their own data
+      if (User.IsInRole("Consumer"))
+  {
+    var userId = GetCurrentUserId();
+     var consumerResult = await _consumerService.GetByUserIdAsync(userId);
+  if (!consumerResult.Success || consumerResult.Data?.Id != id)
+   {
+      return Forbid();
+      }
+        }
+
+        var result = await _consumerService.GetByIdAsync(id);
+   if (!result.Success)
+   {
+    return NotFound(result);
+        }
+        return Ok(result);
+    }
+
+    [HttpGet("number/{consumerNumber}")]
+    [Authorize(Roles = "Admin,BillingOfficer,AccountOfficer")]
+    public async Task<IActionResult> GetByConsumerNumber(string consumerNumber)
+    {
+      var result = await _consumerService.GetByConsumerNumberAsync(consumerNumber);
+    if (!result.Success)
+        {
+ return NotFound(result);
+        }
+  return Ok(result);
+ }
+
+ [HttpGet("my-profile")]
+ [Authorize(Roles = "Consumer")]
+    public async Task<IActionResult> GetMyProfile()
+    {
+        var userId = GetCurrentUserId();
+  var result = await _consumerService.GetByUserIdAsync(userId);
+        if (!result.Success)
+        {
+       return NotFound(result);
+ }
+        return Ok(result);
+    }
+
+    [HttpGet("search")]
+    [Authorize(Roles = "Admin,BillingOfficer,AccountOfficer")]
+ public async Task<IActionResult> Search([FromQuery] string searchTerm)
+    {
+     if (string.IsNullOrWhiteSpace(searchTerm))
+   {
+     return BadRequest("Search term is required");
+ }
+        var result = await _consumerService.SearchAsync(searchTerm);
+        return Ok(result);
+    }
+
+    [HttpPost]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> Create([FromBody] CreateConsumerDto dto)
+    {
+        var result = await _consumerService.CreateAsync(dto);
+  if (!result.Success)
+    {
+   return BadRequest(result);
+ }
+        return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
+    }
+
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateConsumerDto dto)
+    {
+      var result = await _consumerService.UpdateAsync(id, dto);
+        if (!result.Success)
+        {
+  return BadRequest(result);
+        }
+        return Ok(result);
+    }
+
+ [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var result = await _consumerService.DeleteAsync(id);
+    if (!result.Success)
+  {
+ return BadRequest(result);
+  }
+     return Ok(result);
+    }
+
+    private int GetCurrentUserId()
+    {
+var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("userId");
+     return int.Parse(userIdClaim!.Value);
+ }
+}

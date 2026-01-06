@@ -1,0 +1,50 @@
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace UtilityManagmentApi.Entities;
+
+public class TariffPlan
+{
+  [Key]
+  public int Id { get; set; }
+
+  [Required]
+  [MaxLength(100)]
+  public string Name { get; set; } = string.Empty;
+
+  [MaxLength(500)]
+  public string? Description { get; set; }
+
+  [Required]
+  public int UtilityTypeId { get; set; }
+
+  [Required]
+  [Column(TypeName = "decimal(18,4)")]
+  public decimal RatePerUnit { get; set; }
+
+  [Column(TypeName = "decimal(18,2)")]
+  public decimal FixedCharges { get; set; }
+
+  [Column(TypeName = "decimal(5,2)")]
+  public decimal TaxPercentage { get; set; }
+
+  [Column(TypeName = "decimal(18,2)")]
+  public decimal LatePaymentPenalty { get; set; }
+
+  // Slab-based pricing (optional)
+  public int? SlabMinUnits { get; set; }
+  public int? SlabMaxUnits { get; set; }
+
+  public bool IsActive { get; set; } = true;
+
+  public DateTime EffectiveFrom { get; set; }
+  public DateTime? EffectiveTo { get; set; }
+
+  public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+  // Navigation properties
+  [ForeignKey("UtilityTypeId")]
+  public UtilityType UtilityType { get; set; } = null!;
+
+  public ICollection<Connection> Connections { get; set; } = new List<Connection>();
+}

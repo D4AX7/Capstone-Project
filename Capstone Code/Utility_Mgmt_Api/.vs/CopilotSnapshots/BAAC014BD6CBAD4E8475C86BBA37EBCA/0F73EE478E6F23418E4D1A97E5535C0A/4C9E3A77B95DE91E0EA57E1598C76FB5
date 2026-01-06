@@ -1,0 +1,107 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Connection;
+using UtilityManagmentApi.Services.Interfaces;
+
+namespace UtilityManagmentApi.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class ConnectionsController : ControllerBase
+{
+    private readonly IConnectionService _connectionService;
+
+    public ConnectionsController(IConnectionService connectionService)
+    {
+        _connectionService = connectionService;
+    }
+
+    [HttpGet]
+    [Authorize(Roles = "Admin,BillingOfficer,AccountOfficer")]
+    public async Task<IActionResult> GetAll(
+   [FromQuery] PaginationParams paginationParams,
+        [FromQuery] int? utilityTypeId = null,
+      [FromQuery] string? status = null)
+    {
+      var result = await _connectionService.GetAllAsync(paginationParams, utilityTypeId, status);
+   return Ok(result);
+    }
+
+    [HttpGet("{id}")]
+    [Authorize(Roles = "Admin,BillingOfficer,AccountOfficer")]
+public async Task<IActionResult> GetById(int id)
+    {
+        var result = await _connectionService.GetByIdAsync(id);
+   if (!result.Success)
+        {
+         return NotFound(result);
+        }
+        return Ok(result);
+    }
+
+    [HttpGet("number/{connectionNumber}")]
+    [Authorize(Roles = "Admin,BillingOfficer,AccountOfficer")]
+    public async Task<IActionResult> GetByConnectionNumber(string connectionNumber)
+    {
+        var result = await _connectionService.GetByConnectionNumberAsync(connectionNumber);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+    return Ok(result);
+    }
+
+    [HttpGet("consumer/{consumerId}")]
+    [Authorize(Roles = "Admin,BillingOfficer,AccountOfficer,Consumer")]
+    public async Task<IActionResult> GetByConsumerId(int consumerId)
+  {
+        var result = await _connectionService.GetByConsumerIdAsync(consumerId);
+        return Ok(result);
+    }
+
+    [HttpGet("pending-readings")]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> GetPendingReadings([FromQuery] int billingMonth, [FromQuery] int billingYear)
+  {
+        var result = await _connectionService.GetPendingReadingsAsync(billingMonth, billingYear);
+        return Ok(result);
+    }
+
+    [HttpPost]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> Create([FromBody] CreateConnectionDto dto)
+    {
+     var result = await _connectionService.CreateAsync(dto);
+  if (!result.Success)
+        {
+          return BadRequest(result);
+    }
+   return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
+    }
+
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin,BillingOfficer")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateConnectionDto dto)
+    {
+      var result = await _connectionService.UpdateAsync(id, dto);
+        if (!result.Success)
+      {
+            return BadRequest(result);
+        }
+ return Ok(result);
+    }
+
+    [HttpDelete("{id}")]
+ [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var result = await _connectionService.DeleteAsync(id);
+        if (!result.Success)
+     {
+            return BadRequest(result);
+        }
+        return Ok(result);
+    }
+}

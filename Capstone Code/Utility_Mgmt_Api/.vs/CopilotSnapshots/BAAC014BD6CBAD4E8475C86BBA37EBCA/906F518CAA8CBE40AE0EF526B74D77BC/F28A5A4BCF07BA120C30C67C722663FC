@@ -1,0 +1,116 @@
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.TariffPlan;
+using UtilityManagmentApi.Services.Interfaces;
+
+namespace UtilityManagmentApi.Controllers;
+
+/// <summary>
+/// Tariff Plans Controller - Admin only manages (manages tariffs)
+/// Other roles can only read tariff plans for their work
+/// </summary>
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class TariffPlansController : ControllerBase
+{
+    private readonly ITariffPlanService _tariffPlanService;
+
+  public TariffPlansController(ITariffPlanService tariffPlanService)
+    {
+ _tariffPlanService = tariffPlanService;
+    }
+
+    /// <summary>
+    /// Get All Tariff Plans - All roles can read (needed for billing calculations)
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> GetAll([FromQuery] bool? isActive = null, [FromQuery] int? utilityTypeId = null)
+    {
+    var result = await _tariffPlanService.GetAllAsync(isActive, utilityTypeId);
+return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Tariff Plans (Paginated) - All roles can read
+    /// </summary>
+    [HttpGet("paged")]
+  public async Task<IActionResult> GetPaged(
+   [FromQuery] PaginationParams paginationParams,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] int? utilityTypeId = null)
+    {
+        var result = await _tariffPlanService.GetPagedAsync(paginationParams, isActive, utilityTypeId);
+        return Ok(result);
+    }
+
+  /// <summary>
+  /// Get Tariff Plan by ID - All roles can read
+    /// </summary>
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+ var result = await _tariffPlanService.GetByIdAsync(id);
+        if (!result.Success)
+        {
+   return NotFound(result);
+        }
+      return Ok(result);
+    }
+
+    /// <summary>
+    /// Get Plans by Utility Type - All roles can read
+    /// </summary>
+    [HttpGet("utility-type/{utilityTypeId}")]
+    public async Task<IActionResult> GetByUtilityType(int utilityTypeId)
+    {
+     var result = await _tariffPlanService.GetByUtilityTypeAsync(utilityTypeId);
+        return Ok(result);
+    }
+
+    /// <summary>
+  /// Create Tariff Plan - Admin only (manages tariffs)
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = "Admin")]
+ public async Task<IActionResult> Create([FromBody] CreateTariffPlanDto dto)
+    {
+     var result = await _tariffPlanService.CreateAsync(dto);
+   if (!result.Success)
+     {
+    return BadRequest(result);
+   }
+        return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
+}
+
+ /// <summary>
+    /// Update Tariff Plan - Admin only
+ /// </summary>
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Update(int id, [FromBody] UpdateTariffPlanDto dto)
+    {
+        var result = await _tariffPlanService.UpdateAsync(id, dto);
+    if (!result.Success)
+        {
+        return BadRequest(result);
+}
+        return Ok(result);
+    }
+
+    /// <summary>
+  /// Delete Tariff Plan - Admin only
+    /// </summary>
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var result = await _tariffPlanService.DeleteAsync(id);
+        if (!result.Success)
+        {
+      return BadRequest(result);
+        }
+    return Ok(result);
+}
+}

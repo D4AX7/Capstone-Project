@@ -1,0 +1,395 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using System.Security.Claims;
+using UtilityManagmentApi.Controllers;
+using UtilityManagmentApi.DTOs.BillingCycle;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.Services.Interfaces;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Controllers;
+
+/// <summary>
+/// Unit tests for BillingCyclesController - Tests billing cycle management
+/// </summary>
+public class BillingCyclesControllerTests
+{
+    private readonly Mock<IBillingCycleService> _mockBillingCycleService;
+    private readonly BillingCyclesController _controller;
+
+    public BillingCyclesControllerTests()
+    {
+  _mockBillingCycleService = new Mock<IBillingCycleService>();
+        _controller = new BillingCyclesController(_mockBillingCycleService.Object);
+    }
+
+    private void SetupUserClaims(int userId, string role)
+    {
+      var claims = new List<Claim>
+     {
+     new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+     new Claim(ClaimTypes.Role, role)
+  };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var claimsPrincipal = new ClaimsPrincipal(identity);
+
+        _controller.ControllerContext = new ControllerContext
+{
+ HttpContext = new DefaultHttpContext { User = claimsPrincipal }
+     };
+    }
+
+    #region GetAll Billing Cycles Tests
+
+    [Fact]
+    public async Task GetAll_ReturnsOkResult_WithBillingCyclesList()
+    {
+ // Arrange
+   var billingCycles = new List<BillingCycleDto>
+  {
+       new BillingCycleDto 
+    { 
+     Id = 1, 
+            Name = "January 2025", 
+           Month = 1, 
+  Year = 2025,
+StartDate = new DateOnly(2025, 1, 1),
+           EndDate = new DateOnly(2025, 1, 31),
+Status = "Open"
+     },
+    new BillingCycleDto 
+      { 
+      Id = 2, 
+           Name = "February 2025", 
+     Month = 2, 
+     Year = 2025,
+     StartDate = new DateOnly(2025, 2, 1),
+          EndDate = new DateOnly(2025, 2, 28),
+    Status = "Open"
+         }
+      };
+
+        _mockBillingCycleService.Setup(s => s.GetAllAsync(null))
+     .ReturnsAsync(ApiResponse<List<BillingCycleDto>>.SuccessResponse(billingCycles));
+
+     // Act
+   var result = await _controller.GetAll(null);
+
+        // Assert
+ var okResult = Assert.IsType<OkObjectResult>(result);
+      var response = Assert.IsType<ApiResponse<List<BillingCycleDto>>>(okResult.Value);
+   Assert.True(response.Success);
+        Assert.Equal(2, response.Data?.Count);
+  }
+
+    [Fact]
+    public async Task GetAll_WithYearFilter_ReturnsFilteredCycles()
+    {
+        // Arrange
+     var billingCycles = new List<BillingCycleDto>
+   {
+     new BillingCycleDto { Id = 1, Name = "January 2025", Month = 1, Year = 2025 },
+     new BillingCycleDto { Id = 2, Name = "February 2025", Month = 2, Year = 2025 }
+ };
+
+        _mockBillingCycleService.Setup(s => s.GetAllAsync(2025))
+     .ReturnsAsync(ApiResponse<List<BillingCycleDto>>.SuccessResponse(billingCycles));
+
+      // Act
+        var result = await _controller.GetAll(2025);
+
+ // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+     var response = Assert.IsType<ApiResponse<List<BillingCycleDto>>>(okResult.Value);
+ Assert.True(response.Success);
+        Assert.All(response.Data!, c => Assert.Equal(2025, c.Year));
+}
+
+    [Fact]
+ public async Task GetAll_EmptyList_ReturnsOkWithEmptyData()
+    {
+    // Arrange
+        var billingCycles = new List<BillingCycleDto>();
+
+        _mockBillingCycleService.Setup(s => s.GetAllAsync(null))
+    .ReturnsAsync(ApiResponse<List<BillingCycleDto>>.SuccessResponse(billingCycles));
+
+    // Act
+var result = await _controller.GetAll(null);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+ var response = Assert.IsType<ApiResponse<List<BillingCycleDto>>>(okResult.Value);
+   Assert.True(response.Success);
+      Assert.Empty(response.Data!);
+    }
+
+    #endregion
+
+    #region GetCurrentCycle Tests
+
+    [Fact]
+    public async Task GetCurrentCycle_WhenExists_ReturnsOkResult()
+    {
+        // Arrange
+        var currentCycle = new BillingCycleDto
+        {
+   Id = 1,
+       Name = "January 2026",
+          Month = 1,
+            Year = 2026,
+       StartDate = new DateOnly(2026, 1, 1),
+ EndDate = new DateOnly(2026, 1, 31),
+  Status = "Open",
+          TotalReadings = 50,
+   TotalBills = 45
+        };
+
+   _mockBillingCycleService.Setup(s => s.GetCurrentCycleAsync())
+    .ReturnsAsync(ApiResponse<BillingCycleDto>.SuccessResponse(currentCycle));
+
+        // Act
+        var result = await _controller.GetCurrentCycle();
+
+  // Assert
+    var okResult = Assert.IsType<OkObjectResult>(result);
+     var response = Assert.IsType<ApiResponse<BillingCycleDto>>(okResult.Value);
+      Assert.True(response.Success);
+        Assert.Equal("Open", response.Data?.Status);
+  }
+
+    [Fact]
+    public async Task GetCurrentCycle_WhenNotExists_ReturnsNotFound()
+    {
+    // Arrange
+   _mockBillingCycleService.Setup(s => s.GetCurrentCycleAsync())
+    .ReturnsAsync(ApiResponse<BillingCycleDto>.ErrorResponse("No current billing cycle found"));
+
+        // Act
+  var result = await _controller.GetCurrentCycle();
+
+     // Assert
+        var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
+     var response = Assert.IsType<ApiResponse<BillingCycleDto>>(notFoundResult.Value);
+        Assert.False(response.Success);
+    }
+
+    #endregion
+
+    #region Create Billing Cycle Tests
+
+    [Fact]
+    public async Task Create_WithValidData_ReturnsOkResult()
+    {
+        // Arrange
+        SetupUserClaims(1, "Admin");
+    var createDto = new CreateBillingCycleDto
+        {
+  Month = 3,
+           Year = 2025,
+         StartDate = new DateOnly(2025, 3, 1),
+          EndDate = new DateOnly(2025, 3, 31),
+            BillGenerationDate = new DateOnly(2025, 4, 5),
+      DueDate = new DateOnly(2025, 4, 20)
+        };
+
+        var cycleDto = new BillingCycleDto
+      {
+      Id = 3,
+         Name = "March 2025",
+   Month = 3,
+            Year = 2025,
+         StartDate = new DateOnly(2025, 3, 1),
+            EndDate = new DateOnly(2025, 3, 31),
+BillGenerationDate = new DateOnly(2025, 4, 5),
+    DueDate = new DateOnly(2025, 4, 20),
+      Status = "Open"
+        };
+
+     _mockBillingCycleService.Setup(s => s.CreateAsync(createDto, 1))
+        .ReturnsAsync(ApiResponse<BillingCycleDto>.SuccessResponse(cycleDto));
+
+        // Act
+        var result = await _controller.Create(createDto);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<BillingCycleDto>>(okResult.Value);
+        Assert.True(response.Success);
+Assert.Equal("March 2025", response.Data?.Name);
+    }
+
+    [Fact]
+    public async Task Create_WithDuplicateCycle_ReturnsBadRequest()
+    {
+        // Arrange
+        SetupUserClaims(1, "Admin");
+     var createDto = new CreateBillingCycleDto
+        {
+    Month = 1,
+    Year = 2025,
+    StartDate = new DateOnly(2025, 1, 1),
+  EndDate = new DateOnly(2025, 1, 31)
+        };
+
+        _mockBillingCycleService.Setup(s => s.CreateAsync(createDto, 1))
+ .ReturnsAsync(ApiResponse<BillingCycleDto>.ErrorResponse("Billing cycle already exists for this month and year"));
+
+   // Act
+        var result = await _controller.Create(createDto);
+
+        // Assert
+     var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+   var response = Assert.IsType<ApiResponse<BillingCycleDto>>(badRequestResult.Value);
+   Assert.Contains("already exists", response.Message);
+    }
+
+    [Fact]
+    public async Task Create_WithInvalidDateRange_ReturnsBadRequest()
+    {
+        // Arrange
+SetupUserClaims(1, "Admin");
+    var createDto = new CreateBillingCycleDto
+        {
+     Month = 1,
+          Year = 2025,
+   StartDate = new DateOnly(2025, 1, 31), // Start after end
+            EndDate = new DateOnly(2025, 1, 1)
+        };
+
+        _mockBillingCycleService.Setup(s => s.CreateAsync(createDto, 1))
+      .ReturnsAsync(ApiResponse<BillingCycleDto>.ErrorResponse("Start date must be before end date"));
+
+  // Act
+        var result = await _controller.Create(createDto);
+
+        // Assert
+  Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    #endregion
+
+#region Update Billing Cycle Tests
+
+    [Fact]
+    public async Task Update_WithValidData_ReturnsOkResult()
+    {
+  // Arrange
+     var updateDto = new UpdateBillingCycleDto
+        {
+    Status = "Closed"
+    };
+
+      var cycleDto = new BillingCycleDto
+        {
+       Id = 1,
+      Name = "January 2025",
+       Month = 1,
+ Year = 2025,
+            Status = "Closed"
+     };
+
+        _mockBillingCycleService.Setup(s => s.UpdateAsync(1, updateDto))
+   .ReturnsAsync(ApiResponse<BillingCycleDto>.SuccessResponse(cycleDto));
+
+   // Act
+    var result = await _controller.Update(1, updateDto);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+  var response = Assert.IsType<ApiResponse<BillingCycleDto>>(okResult.Value);
+        Assert.True(response.Success);
+        Assert.Equal("Closed", response.Data?.Status);
+    }
+
+    [Fact]
+    public async Task Update_WithInvalidId_ReturnsBadRequest()
+    {
+     // Arrange
+  var updateDto = new UpdateBillingCycleDto
+ {
+        Status = "Closed"
+    };
+
+        _mockBillingCycleService.Setup(s => s.UpdateAsync(999, updateDto))
+    .ReturnsAsync(ApiResponse<BillingCycleDto>.ErrorResponse("Billing cycle not found"));
+
+ // Act
+        var result = await _controller.Update(999, updateDto);
+
+        // Assert
+    Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Update_WithInvalidStatus_ReturnsBadRequest()
+ {
+        // Arrange
+ var updateDto = new UpdateBillingCycleDto
+  {
+    Status = "InvalidStatus"
+        };
+
+        _mockBillingCycleService.Setup(s => s.UpdateAsync(1, updateDto))
+      .ReturnsAsync(ApiResponse<BillingCycleDto>.ErrorResponse("Invalid status value"));
+
+  // Act
+        var result = await _controller.Update(1, updateDto);
+
+   // Assert
+      Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    #endregion
+
+ #region Delete Billing Cycle Tests
+
+    [Fact]
+    public async Task Delete_WithValidId_ReturnsOkResult()
+    {
+        // Arrange
+        _mockBillingCycleService.Setup(s => s.DeleteAsync(1))
+       .ReturnsAsync(ApiResponse<bool>.SuccessResponse(true));
+
+  // Act
+        var result = await _controller.Delete(1);
+
+        // Assert
+   var okResult = Assert.IsType<OkObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<bool>>(okResult.Value);
+     Assert.True(response.Success);
+    }
+
+    [Fact]
+    public async Task Delete_WithInvalidId_ReturnsBadRequest()
+    {
+        // Arrange
+  _mockBillingCycleService.Setup(s => s.DeleteAsync(999))
+       .ReturnsAsync(ApiResponse<bool>.ErrorResponse("Billing cycle not found"));
+
+        // Act
+        var result = await _controller.Delete(999);
+
+        // Assert
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+  public async Task Delete_CycleWithBills_ReturnsBadRequest()
+ {
+  // Arrange
+        _mockBillingCycleService.Setup(s => s.DeleteAsync(1))
+   .ReturnsAsync(ApiResponse<bool>.ErrorResponse("Cannot delete billing cycle with existing bills"));
+
+        // Act
+        var result = await _controller.Delete(1);
+
+        // Assert
+var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+   var response = Assert.IsType<ApiResponse<bool>>(badRequestResult.Value);
+Assert.Contains("existing bills", response.Message);
+    }
+
+ #endregion
+}

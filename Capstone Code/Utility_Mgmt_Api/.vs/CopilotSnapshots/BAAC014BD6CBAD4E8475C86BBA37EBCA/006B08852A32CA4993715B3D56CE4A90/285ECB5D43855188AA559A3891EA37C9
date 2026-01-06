@@ -1,0 +1,47 @@
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace UtilityManagmentApi.Entities;
+
+public class BillingCycle
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty;
+
+    [Required]
+    public int Month { get; set; }
+
+    [Required]
+    public int Year { get; set; }
+
+    [Required]
+    public DateTime StartDate { get; set; }
+
+    [Required]
+    public DateTime EndDate { get; set; }
+
+    public DateTime? BillGenerationDate { get; set; }
+
+    public DateTime? DueDate { get; set; }
+
+    public BillingCycleStatus Status { get; set; } = BillingCycleStatus.Open;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public int? CreatedByUserId { get; set; }
+
+    [ForeignKey("CreatedByUserId")]
+    public User? CreatedByUser { get; set; }
+}
+
+public enum BillingCycleStatus
+{
+    Open = 1,
+    ReadingInProgress = 2,
+    BillingInProgress = 3,
+    Closed = 4
+}

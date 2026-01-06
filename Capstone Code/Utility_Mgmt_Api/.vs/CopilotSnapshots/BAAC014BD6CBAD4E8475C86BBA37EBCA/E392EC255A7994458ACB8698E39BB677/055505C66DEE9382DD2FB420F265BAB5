@@ -1,0 +1,233 @@
+﻿using Moq;
+using UtilityManagmentApi.DTOs.Bill;
+using UtilityManagmentApi.DTOs.Payment;
+using UtilityManagmentApi.Entities;
+using UtilityManagmentApi.Services.Implementations;
+using UtilityManagmentApi.Services.Interfaces;
+using UtilityManagmentApi.Tests.Helpers;
+
+namespace UtilityManagmentApi.Tests.Services;
+
+public class PaymentServiceTests
+{
+    private readonly Mock<INotificationService> _notificationServiceMock;
+    private readonly Mock<INotificationService> _billNotificationMock;
+
+    public PaymentServiceTests()
+  {
+   _notificationServiceMock = new Mock<INotificationService>();
+  _billNotificationMock = new Mock<INotificationService>();
+    }
+
+    [Fact]
+    public async Task CreateAsync_ValidPayment_RecordsSuccessfully()
+    {
+  // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("PaymentTest_Create");
+  await TestDbContextFactory.SeedTestDataAsync(context);
+
+        var billService = new BillService(context, _billNotificationMock.Object);
+        var paymentService = new PaymentService(context, _notificationServiceMock.Object);
+
+     // Generate a bill first
+        var billResult = await billService.GenerateBillAsync(new GenerateBillDto
+        {
+       ConnectionId = 1,
+     BillingMonth = DateTime.UtcNow.Month,
+   BillingYear = DateTime.UtcNow.Year
+  }, 2);
+
+ var dto = new CreatePaymentDto
+        {
+    BillId = billResult.Data!.Id,
+Amount = 50,
+  PaymentMethod = "Cash"
+     };
+
+        // Act
+ var result = await paymentService.CreateAsync(dto, 3);
+
+        // Assert
+      Assert.True(result.Success);
+   Assert.NotNull(result.Data);
+    Assert.Equal(50, result.Data.Amount);
+    Assert.Equal("Cash", result.Data.PaymentMethod);
+    }
+
+ [Fact]
+    public async Task CreateAsync_FullPayment_MarksBillAsPaid()
+    {
+     // Arrange
+      var context = TestDbContextFactory.CreateInMemoryContext("PaymentTest_FullPayment");
+ await TestDbContextFactory.SeedTestDataAsync(context);
+
+        var billService = new BillService(context, _billNotificationMock.Object);
+       var paymentService = new PaymentService(context, _notificationServiceMock.Object);
+
+        // Generate a bill
+   var billResult = await billService.GenerateBillAsync(new GenerateBillDto
+ {
+    ConnectionId = 1,
+    BillingMonth = DateTime.UtcNow.Month,
+      BillingYear = DateTime.UtcNow.Year
+        }, 2);
+
+        var dto = new CreatePaymentDto
+        {
+            BillId = billResult.Data!.Id,
+            Amount = billResult.Data.TotalAmount, // Full payment
+   PaymentMethod = "OnlinePayment"
+        };
+
+        // Act
+  var result = await paymentService.CreateAsync(dto, 3);
+
+    // Assert
+  Assert.True(result.Success);
+
+ // Check bill status
+        var bill = context.Bills.First();
+  Assert.Equal(BillStatus.Paid, bill.Status);
+        Assert.Equal(0, bill.OutstandingBalance);
+    }
+
+ [Fact]
+  public async Task CreateAsync_PartialPayment_MarksBillAsPartiallyPaid()
+  {
+     // Arrange
+    var context = TestDbContextFactory.CreateInMemoryContext("PaymentTest_Partial");
+    await TestDbContextFactory.SeedTestDataAsync(context);
+
+        var billService = new BillService(context, _billNotificationMock.Object);
+        var paymentService = new PaymentService(context, _notificationServiceMock.Object);
+
+        // Generate a bill
+        var billResult = await billService.GenerateBillAsync(new GenerateBillDto
+  {
+   ConnectionId = 1,
+   BillingMonth = DateTime.UtcNow.Month,
+ BillingYear = DateTime.UtcNow.Year
+     }, 2);
+
+        var dto = new CreatePaymentDto
+    {
+     BillId = billResult.Data!.Id,
+          Amount = billResult.Data.TotalAmount / 2, // Partial payment
+    PaymentMethod = "CreditCard"
+    };
+
+     // Act
+   var result = await paymentService.CreateAsync(dto, 3);
+
+        // Assert
+Assert.True(result.Success);
+
+   // Check bill status
+        var bill = context.Bills.First();
+   Assert.Equal(BillStatus.PartiallyPaid, bill.Status);
+  Assert.True(bill.OutstandingBalance > 0);
+    }
+
+    [Fact]
+ public async Task CreateAsync_ExceedsOutstanding_ReturnsError()
+    {
+   // Arrange
+  var context = TestDbContextFactory.CreateInMemoryContext("PaymentTest_Exceeds");
+        await TestDbContextFactory.SeedTestDataAsync(context);
+
+        var billService = new BillService(context, _billNotificationMock.Object);
+var paymentService = new PaymentService(context, _notificationServiceMock.Object);
+
+ // Generate a bill
+        var billResult = await billService.GenerateBillAsync(new GenerateBillDto
+     {
+          ConnectionId = 1,
+     BillingMonth = DateTime.UtcNow.Month,
+ BillingYear = DateTime.UtcNow.Year
+     }, 2);
+
+     var dto = new CreatePaymentDto
+     {
+    BillId = billResult.Data!.Id,
+     Amount = billResult.Data.TotalAmount + 100, // More than outstanding
+       PaymentMethod = "Cash"
+        };
+
+        // Act
+ var result = await paymentService.CreateAsync(dto, 3);
+
+        // Assert
+        Assert.False(result.Success);
+ Assert.Contains("exceeds outstanding balance", result.Message);
+    }
+
+    [Fact]
+   public async Task GetSummaryAsync_ReturnsPaymentStatistics()
+    {
+        // Arrange
+var context = TestDbContextFactory.CreateInMemoryContext("PaymentTest_Summary");
+        await TestDbContextFactory.SeedTestDataAsync(context);
+
+  var billService = new BillService(context, _billNotificationMock.Object);
+       var paymentService = new PaymentService(context, _notificationServiceMock.Object);
+
+        // Generate a bill and make payment
+  var billResult = await billService.GenerateBillAsync(new GenerateBillDto
+   {
+   ConnectionId = 1,
+       BillingMonth = DateTime.UtcNow.Month,
+    BillingYear = DateTime.UtcNow.Year
+  }, 2);
+
+  await paymentService.CreateAsync(new CreatePaymentDto
+  {
+            BillId = billResult.Data!.Id,
+            Amount = 50,
+     PaymentMethod = "Cash"
+        }, 3);
+
+        // Act
+        var result = await paymentService.GetSummaryAsync();
+
+    // Assert
+     Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(1, result.Data.TotalPayments);
+   Assert.Equal(50, result.Data.TotalAmount);
+        Assert.True(result.Data.ByPaymentMethod.ContainsKey("Cash"));
+  }
+
+ [Fact]
+    public async Task GetByConsumerIdAsync_ReturnsConsumerPayments()
+   {
+      // Arrange
+     var context = TestDbContextFactory.CreateInMemoryContext("PaymentTest_ByConsumer");
+    await TestDbContextFactory.SeedTestDataAsync(context);
+
+        var billService = new BillService(context, _billNotificationMock.Object);
+        var paymentService = new PaymentService(context, _notificationServiceMock.Object);
+
+     // Generate a bill and make payment
+   var billResult = await billService.GenerateBillAsync(new GenerateBillDto
+        {
+  ConnectionId = 1,
+       BillingMonth = DateTime.UtcNow.Month,
+    BillingYear = DateTime.UtcNow.Year
+    }, 2);
+
+ await paymentService.CreateAsync(new CreatePaymentDto
+        {
+    BillId = billResult.Data!.Id,
+ Amount = 50,
+   PaymentMethod = "UPI"
+        }, 3);
+
+    // Act
+   var result = await paymentService.GetByConsumerIdAsync(1);
+
+   // Assert
+     Assert.True(result.Success);
+     Assert.NotNull(result.Data);
+        Assert.Single(result.Data);
+  }
+}

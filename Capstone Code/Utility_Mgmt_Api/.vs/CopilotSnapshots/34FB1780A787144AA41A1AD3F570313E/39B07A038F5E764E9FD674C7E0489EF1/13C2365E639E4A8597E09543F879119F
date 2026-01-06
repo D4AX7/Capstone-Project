@@ -1,0 +1,95 @@
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace UtilityManagmentApi.Entities;
+
+public class Bill
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string BillNumber { get; set; } = string.Empty;
+
+    [Required]
+    public int ConnectionId { get; set; }
+
+    public int? MeterReadingId { get; set; }
+
+    [Required]
+    public int BillingMonth { get; set; }
+
+    [Required]
+    public int BillingYear { get; set; }
+
+    [Required]
+    public DateOnly BillDate { get; set; }
+
+    [Required]
+    public DateOnly DueDate { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal PreviousReading { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal CurrentReading { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal UnitsConsumed { get; set; }
+
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal RatePerUnit { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal EnergyCharges { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal FixedCharges { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal TaxAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal PenaltyAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal PreviousBalance { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal TotalAmount { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal AmountPaid { get; set; }
+
+    [Column(TypeName = "decimal(18,2)")]
+    public decimal OutstandingBalance { get; set; }
+
+    [Required]
+    public BillStatus Status { get; set; } = BillStatus.Due;
+
+    public int? GeneratedByUserId { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAt { get; set; }
+
+    // Navigation properties
+    [ForeignKey("ConnectionId")]
+    public Connection Connection { get; set; } = null!;
+
+    [ForeignKey("MeterReadingId")]
+    public MeterReading? MeterReading { get; set; }
+
+    [ForeignKey("GeneratedByUserId")]
+    public User? GeneratedByUser { get; set; }
+
+    public ICollection<Payment> Payments { get; set; } = new List<Payment>();
+}
+
+public enum BillStatus
+{
+    Due = 1,
+    Paid = 2,
+    Overdue = 3
+}

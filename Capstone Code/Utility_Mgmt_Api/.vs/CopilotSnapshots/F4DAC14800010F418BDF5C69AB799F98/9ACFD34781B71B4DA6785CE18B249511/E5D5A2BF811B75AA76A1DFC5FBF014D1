@@ -1,0 +1,27 @@
+﻿using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+
+namespace UtilityManagmentApi.Data.Converters;
+
+/// <summary>
+/// Converts DateOnly to DateTime for SQL Server storage
+/// </summary>
+public class DateOnlyConverter : ValueConverter<DateOnly, DateTime>
+{
+    public DateOnlyConverter() : base(
+        dateOnly => dateOnly.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+    dateTime => DateOnly.FromDateTime(dateTime.Kind == DateTimeKind.Utc ? dateTime : DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)))
+    {
+    }
+}
+
+/// <summary>
+/// Converts nullable DateOnly to nullable DateTime for SQL Server storage
+/// </summary>
+public class NullableDateOnlyConverter : ValueConverter<DateOnly?, DateTime?>
+{
+    public NullableDateOnlyConverter() : base(
+ dateOnly => dateOnly.HasValue ? dateOnly.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) : null,
+        dateTime => dateTime.HasValue ? DateOnly.FromDateTime(dateTime.Value.Kind == DateTimeKind.Utc ? dateTime.Value : DateTime.SpecifyKind(dateTime.Value, DateTimeKind.Utc)) : null)
+    {
+  }
+}

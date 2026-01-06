@@ -1,0 +1,212 @@
+﻿using Moq;
+using UtilityManagmentApi.DTOs.Bill;
+using UtilityManagmentApi.DTOs.Payment;
+using UtilityManagmentApi.Services.Implementations;
+using UtilityManagmentApi.Services.Interfaces;
+using UtilityManagmentApi.Tests.Helpers;
+
+namespace UtilityManagmentApi.Tests.Services;
+
+public class ReportServiceTests
+{
+    private readonly Mock<INotificationService> _notificationServiceMock;
+
+    public ReportServiceTests()
+    {
+        _notificationServiceMock = new Mock<INotificationService>();
+    }
+
+    [Fact]
+    public async Task GetDashboardSummaryAsync_ReturnsSummary()
+    {
+ // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("ReportTest_Dashboard");
+      await TestDbContextFactory.SeedTestDataAsync(context);
+     var service = new ReportService(context);
+
+      // Act
+   var result = await service.GetDashboardSummaryAsync();
+
+      // Assert
+    Assert.True(result.Success);
+      Assert.NotNull(result.Data);
+       Assert.True(result.Data.TotalConsumers >= 1);
+       Assert.True(result.Data.ActiveConnections >= 1);
+  }
+
+    [Fact]
+    public async Task GetMonthlyRevenueReportAsync_ReturnsRevenueData()
+    {
+   // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("ReportTest_Revenue");
+       await TestDbContextFactory.SeedTestDataAsync(context);
+
+  var billService = new BillService(context, _notificationServiceMock.Object);
+        var paymentService = new PaymentService(context, _notificationServiceMock.Object);
+ var reportService = new ReportService(context);
+
+        // Generate a bill and make payment
+    await billService.GenerateBillAsync(new GenerateBillDto
+       {
+         ConnectionId = 1,
+BillingMonth = DateTime.UtcNow.Month,
+  BillingYear = DateTime.UtcNow.Year
+    }, 2);
+
+        var bill = context.Bills.First();
+        await paymentService.CreateAsync(new CreatePaymentDto
+    {
+BillId = bill.Id,
+    Amount = 50,
+        PaymentMethod = "Cash"
+       }, 3);
+
+  // Act
+   var result = await reportService.GetMonthlyRevenueReportAsync(
+   DateTime.UtcNow.Month,
+       DateTime.UtcNow.Year
+        );
+
+      // Assert
+ Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+  Assert.True(result.Data.TotalBilledAmount > 0);
+    Assert.True(result.Data.TotalCollected > 0);
+        Assert.NotEmpty(result.Data.ByUtilityType);
+    }
+
+    [Fact]
+   public async Task GetOutstandingDuesReportAsync_ReturnsOutstandingData()
+    {
+        // Arrange
+   var context = TestDbContextFactory.CreateInMemoryContext("ReportTest_Outstanding");
+ await TestDbContextFactory.SeedTestDataAsync(context);
+
+   var billService = new BillService(context, _notificationServiceMock.Object);
+        var reportService = new ReportService(context);
+
+        // Generate a bill (unpaid)
+await billService.GenerateBillAsync(new GenerateBillDto
+  {
+            ConnectionId = 1,
+ BillingMonth = DateTime.UtcNow.Month,
+            BillingYear = DateTime.UtcNow.Year
+  }, 2);
+
+  // Act
+     var result = await reportService.GetOutstandingDuesReportAsync();
+
+        // Assert
+   Assert.True(result.Success);
+  Assert.NotNull(result.Data);
+        Assert.True(result.Data.TotalOutstanding > 0);
+  Assert.NotEmpty(result.Data.ByAgeBucket);
+    }
+
+    [Fact]
+ public async Task GetConsumptionReportAsync_ReturnsConsumptionData()
+    {
+    // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("ReportTest_Consumption");
+       await TestDbContextFactory.SeedTestDataAsync(context);
+        var reportService = new ReportService(context);
+
+        // Act
+      var result = await reportService.GetConsumptionReportAsync(
+  DateTime.UtcNow.Month,
+       DateTime.UtcNow.Year
+    );
+
+        // Assert
+        Assert.True(result.Success);
+      Assert.NotNull(result.Data);
+        Assert.True(result.Data.TotalConsumption >= 500); // From seed data
+   Assert.NotEmpty(result.Data.ByUtilityType);
+    }
+
+    [Fact]
+    public async Task GetConsumerBillingSummaryAsync_ReturnsSummary()
+    {
+        // Arrange
+      var context = TestDbContextFactory.CreateInMemoryContext("ReportTest_ConsumerSummary");
+   await TestDbContextFactory.SeedTestDataAsync(context);
+
+   var billService = new BillService(context, _notificationServiceMock.Object);
+        var reportService = new ReportService(context);
+
+      // Generate a bill
+       await billService.GenerateBillAsync(new GenerateBillDto
+        {
+    ConnectionId = 1,
+   BillingMonth = DateTime.UtcNow.Month,
+            BillingYear = DateTime.UtcNow.Year
+       }, 2);
+
+   // Act
+        var result = await reportService.GetConsumerBillingSummaryAsync(1);
+
+        // Assert
+   Assert.True(result.Success);
+   Assert.NotNull(result.Data);
+  Assert.Equal("CON240001", result.Data.ConsumerNumber);
+        Assert.True(result.Data.TotalBills >= 1);
+        Assert.True(result.Data.TotalBilledAmount > 0);
+  }
+
+    [Fact]
+    public async Task GetCollectionReportAsync_ReturnsCollectionData()
+    {
+        // Arrange
+        var context = TestDbContextFactory.CreateInMemoryContext("ReportTest_Collection");
+     await TestDbContextFactory.SeedTestDataAsync(context);
+
+        var billService = new BillService(context, _notificationServiceMock.Object);
+     var paymentService = new PaymentService(context, _notificationServiceMock.Object);
+       var reportService = new ReportService(context);
+
+  // Generate bill and payment
+     await billService.GenerateBillAsync(new GenerateBillDto
+        {
+         ConnectionId = 1,
+            BillingMonth = DateTime.UtcNow.Month,
+        BillingYear = DateTime.UtcNow.Year
+  }, 2);
+
+       var bill = context.Bills.First();
+   await paymentService.CreateAsync(new CreatePaymentDto
+   {
+   BillId = bill.Id,
+     Amount = 50,
+           PaymentMethod = "Cash"
+      }, 3);
+
+        // Act
+    var result = await reportService.GetCollectionReportAsync(
+            DateTime.UtcNow.AddDays(-30),
+ DateTime.UtcNow.AddDays(1)
+    );
+
+        // Assert
+    Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.True(result.Data.TotalCollected > 0);
+        Assert.NotEmpty(result.Data.ByPaymentMethod);
+  }
+
+ [Fact]
+    public async Task GetYearlyRevenueReportAsync_Returns12Months()
+    {
+   // Arrange
+     var context = TestDbContextFactory.CreateInMemoryContext("ReportTest_Yearly");
+ await TestDbContextFactory.SeedTestDataAsync(context);
+  var reportService = new ReportService(context);
+
+        // Act
+        var result = await reportService.GetYearlyRevenueReportAsync(DateTime.UtcNow.Year);
+
+   // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(12, result.Data.Count);
+    }
+}

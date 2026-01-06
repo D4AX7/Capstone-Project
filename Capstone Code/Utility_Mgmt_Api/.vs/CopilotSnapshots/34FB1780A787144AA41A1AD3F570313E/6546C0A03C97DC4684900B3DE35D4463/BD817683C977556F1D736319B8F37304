@@ -1,0 +1,20 @@
+﻿using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Notification;
+using UtilityManagmentApi.Entities;
+
+namespace UtilityManagmentApi.Services.Interfaces;
+
+public interface INotificationService
+{
+    Task<ApiResponse<NotificationDto>> GetByIdAsync(int id);
+    Task<ApiResponse<List<NotificationDto>>> GetByUserIdAsync(int userId, bool? isRead = null);
+    Task<ApiResponse<NotificationSummaryDto>> GetSummaryAsync(int userId);
+    Task<ApiResponse<NotificationDto>> CreateAsync(CreateNotificationDto dto);
+    Task<ApiResponse<bool>> MarkAsReadAsync(int id);
+    Task<ApiResponse<bool>> MarkAllAsReadAsync(int userId);
+    Task<ApiResponse<bool>> DeleteAsync(int id);
+    Task CreateBillGeneratedNotificationAsync(int userId, int billId, string billNumber, decimal amount);
+    Task CreatePaymentReceivedNotificationAsync(int userId, int paymentId, decimal amount);
+    Task CreateDueDateReminderAsync(int userId, int billId, string billNumber, DateTime dueDate);
+    Task CreateNotificationAsync(int userId, string title, string message, NotificationType type, int? relatedEntityId = null, string? relatedEntityType = null);
+}

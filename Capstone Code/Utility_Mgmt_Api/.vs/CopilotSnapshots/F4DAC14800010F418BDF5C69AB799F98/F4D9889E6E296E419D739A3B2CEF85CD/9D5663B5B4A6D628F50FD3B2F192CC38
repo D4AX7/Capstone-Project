@@ -1,0 +1,204 @@
+﻿using Microsoft.EntityFrameworkCore;
+using UtilityManagmentApi.Data;
+using UtilityManagmentApi.DTOs.BillingCycle;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.Entities;
+using UtilityManagmentApi.Services.Interfaces;
+using System.Globalization;
+
+namespace UtilityManagmentApi.Services.Implementations;
+
+public class BillingCycleService : IBillingCycleService
+{
+ private readonly ApplicationDbContext _context;
+
+    public BillingCycleService(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<ApiResponse<BillingCycleDto>> GetByIdAsync(int id)
+    {
+        var cycle = await _context.BillingCycles
+    .Include(bc => bc.CreatedByUser)
+    .FirstOrDefaultAsync(bc => bc.Id == id);
+
+     if (cycle == null)
+        {
+  return ApiResponse<BillingCycleDto>.ErrorResponse("Billing cycle not found");
+        }
+
+  return ApiResponse<BillingCycleDto>.SuccessResponse(await MapToDtoAsync(cycle));
+  }
+
+    public async Task<ApiResponse<BillingCycleDto>> GetCurrentCycleAsync()
+    {
+      var currentMonth = DateTime.UtcNow.Month;
+        var currentYear = DateTime.UtcNow.Year;
+
+ var cycle = await _context.BillingCycles
+     .Include(bc => bc.CreatedByUser)
+  .FirstOrDefaultAsync(bc => bc.Month == currentMonth && bc.Year == currentYear);
+
+        if (cycle == null)
+ {
+    return ApiResponse<BillingCycleDto>.ErrorResponse("No billing cycle found for current period");
+   }
+
+        return ApiResponse<BillingCycleDto>.SuccessResponse(await MapToDtoAsync(cycle));
+  }
+
+    public async Task<ApiResponse<List<BillingCycleDto>>> GetAllAsync(int? year = null)
+    {
+        var query = _context.BillingCycles
+ .Include(bc => bc.CreatedByUser)
+     .AsQueryable();
+
+        if (year.HasValue)
+        {
+       query = query.Where(bc => bc.Year == year.Value);
+        }
+
+      var cycles = await query
+         .OrderByDescending(bc => bc.Year)
+        .ThenByDescending(bc => bc.Month)
+     .ToListAsync();
+
+   var dtos = new List<BillingCycleDto>();
+        foreach (var cycle in cycles)
+  {
+    dtos.Add(await MapToDtoAsync(cycle));
+    }
+
+        return ApiResponse<List<BillingCycleDto>>.SuccessResponse(dtos);
+    }
+
+    public async Task<ApiResponse<BillingCycleDto>> CreateAsync(CreateBillingCycleDto dto, int userId)
+ {
+      // Check if cycle already exists
+        if (await _context.BillingCycles.AnyAsync(bc => bc.Month == dto.Month && bc.Year == dto.Year))
+    {
+            return ApiResponse<BillingCycleDto>.ErrorResponse("Billing cycle already exists for this period");
+      }
+
+        var monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(dto.Month);
+
+        var cycle = new BillingCycle
+        {
+            Name = $"{monthName} {dto.Year}",
+       Month = dto.Month,
+    Year = dto.Year,
+     StartDate = dto.StartDate ?? new DateOnly(dto.Year, dto.Month, 1),
+   EndDate = dto.EndDate ?? new DateOnly(dto.Year, dto.Month, DateTime.DaysInMonth(dto.Year, dto.Month)),
+       BillGenerationDate = dto.BillGenerationDate,
+            DueDate = dto.DueDate ?? new DateOnly(dto.Year, dto.Month, DateTime.DaysInMonth(dto.Year, dto.Month)).AddDays(15),
+            Status = BillingCycleStatus.Open,
+            CreatedAt = DateTime.UtcNow,
+            CreatedByUserId = userId
+        };
+
+        _context.BillingCycles.Add(cycle);
+        await _context.SaveChangesAsync();
+
+        cycle.CreatedByUser = await _context.Users.FindAsync(userId);
+
+        return ApiResponse<BillingCycleDto>.SuccessResponse(await MapToDtoAsync(cycle), "Billing cycle created successfully");
+    }
+
+    public async Task<ApiResponse<BillingCycleDto>> UpdateAsync(int id, UpdateBillingCycleDto dto)
+    {
+    var cycle = await _context.BillingCycles
+       .Include(bc => bc.CreatedByUser)
+  .FirstOrDefaultAsync(bc => bc.Id == id);
+
+        if (cycle == null)
+      {
+     return ApiResponse<BillingCycleDto>.ErrorResponse("Billing cycle not found");
+     }
+
+        if (!string.IsNullOrEmpty(dto.Status) && Enum.TryParse<BillingCycleStatus>(dto.Status, true, out var status))
+        {
+     cycle.Status = status;
+        }
+
+        // Update Month and Year if provided, and update the Name accordingly
+      if (dto.Month.HasValue)
+     cycle.Month = dto.Month.Value;
+
+     if (dto.Year.HasValue)
+ cycle.Year = dto.Year.Value;
+
+        // Update Name if Month or Year changed
+        if (dto.Month.HasValue || dto.Year.HasValue)
+{
+          var monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(cycle.Month);
+    cycle.Name = $"{monthName} {cycle.Year}";
+        }
+
+        if (dto.StartDate.HasValue)
+   cycle.StartDate = dto.StartDate.Value;
+
+        if (dto.EndDate.HasValue)
+   cycle.EndDate = dto.EndDate.Value;
+
+        if (dto.BillGenerationDate.HasValue)
+  cycle.BillGenerationDate = dto.BillGenerationDate.Value;
+
+        if (dto.DueDate.HasValue)
+            cycle.DueDate = dto.DueDate.Value;
+
+ await _context.SaveChangesAsync();
+
+   return ApiResponse<BillingCycleDto>.SuccessResponse(await MapToDtoAsync(cycle), "Billing cycle updated successfully");
+    }
+
+  public async Task<ApiResponse<bool>> DeleteAsync(int id)
+    {
+      var cycle = await _context.BillingCycles.FindAsync(id);
+     if (cycle == null)
+  {
+ return ApiResponse<bool>.ErrorResponse("Billing cycle not found");
+        }
+
+        // Check if there are readings or bills for this cycle
+        var hasData = await _context.MeterReadings.AnyAsync(m => m.BillingMonth == cycle.Month && m.BillingYear == cycle.Year) ||
+    await _context.Bills.AnyAsync(b => b.BillingMonth == cycle.Month && b.BillingYear == cycle.Year);
+
+        if (hasData)
+ {
+     return ApiResponse<bool>.ErrorResponse("Cannot delete billing cycle with existing readings or bills");
+}
+
+        _context.BillingCycles.Remove(cycle);
+        await _context.SaveChangesAsync();
+
+        return ApiResponse<bool>.SuccessResponse(true, "Billing cycle deleted successfully");
+  }
+
+private async Task<BillingCycleDto> MapToDtoAsync(BillingCycle cycle)
+ {
+   var totalReadings = await _context.MeterReadings
+        .CountAsync(m => m.BillingMonth == cycle.Month && m.BillingYear == cycle.Year);
+
+        var totalBills = await _context.Bills
+.CountAsync(b => b.BillingMonth == cycle.Month && b.BillingYear == cycle.Year);
+
+        return new BillingCycleDto
+ {
+    Id = cycle.Id,
+ Name = cycle.Name,
+     Month = cycle.Month,
+  Year = cycle.Year,
+    StartDate = cycle.StartDate,
+         EndDate = cycle.EndDate,
+    BillGenerationDate = cycle.BillGenerationDate,
+            DueDate = cycle.DueDate,
+   Status = cycle.Status.ToString(),
+       CreatedAt = cycle.CreatedAt,
+     CreatedByUserName = cycle.CreatedByUser != null ?
+$"{cycle.CreatedByUser.FirstName} {cycle.CreatedByUser.LastName}" : null,
+     TotalReadings = totalReadings,
+ TotalBills = totalBills
+  };
+    }
+}

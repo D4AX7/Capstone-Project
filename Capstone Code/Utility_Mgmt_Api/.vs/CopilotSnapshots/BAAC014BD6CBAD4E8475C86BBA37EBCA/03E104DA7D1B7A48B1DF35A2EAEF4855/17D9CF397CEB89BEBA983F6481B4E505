@@ -1,0 +1,329 @@
+﻿using Microsoft.EntityFrameworkCore;
+using UtilityManagmentApi.Data;
+using UtilityManagmentApi.DTOs.Admin;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.Entities;
+using UtilityManagmentApi.Services.Interfaces;
+
+namespace UtilityManagmentApi.Services.Implementations;
+
+public class AdminService : IAdminService
+{
+    private readonly ApplicationDbContext _context;
+
+    public AdminService(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    #region Dashboard
+
+    public async Task<ApiResponse<AdminDashboardDto>> GetAdminDashboardAsync()
+    {
+        var dashboard = new AdminDashboardDto
+        {
+      // User Statistics
+     TotalUsers = await _context.Users.CountAsync(),
+   ActiveUsers = await _context.Users.CountAsync(u => u.IsActive),
+        PendingUsers = await _context.Users.CountAsync(u => !u.IsActive),
+            UsersByRole = await _context.Users
+.GroupBy(u => u.Role.ToString())
+    .Select(g => new { Role = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Role, x => x.Count),
+
+       // Utility Types Statistics
+          TotalUtilityTypes = await _context.UtilityTypes.CountAsync(),
+            ActiveUtilityTypes = await _context.UtilityTypes.CountAsync(u => u.IsActive),
+
+     // Tariff Plans Statistics
+    TotalTariffPlans = await _context.TariffPlans.CountAsync(),
+         ActiveTariffPlans = await _context.TariffPlans.CountAsync(t => t.IsActive),
+
+         // Billing Cycles Statistics
+    TotalBillingCycles = await _context.BillingCycles.CountAsync(),
+        CurrentBillingCycle = await _context.BillingCycles
+              .Where(bc => bc.Month == DateTime.UtcNow.Month && bc.Year == DateTime.UtcNow.Year)
+  .Select(bc => bc.Name)
+    .FirstOrDefaultAsync(),
+
+            // Consumer Statistics
+        TotalConsumers = await _context.Consumers.CountAsync(),
+ ActiveConsumers = await _context.Consumers.CountAsync(c => c.IsActive),
+
+            // Connection Statistics
+   TotalConnections = await _context.Connections.CountAsync(),
+          ActiveConnections = await _context.Connections.CountAsync(c => c.Status == ConnectionStatus.Active),
+
+         // System Info
+   LastUpdated = DateTime.UtcNow
+        };
+
+    return ApiResponse<AdminDashboardDto>.SuccessResponse(dashboard);
+    }
+
+    public async Task<ApiResponse<List<RecentActivityDto>>> GetRecentActivityAsync(int count = 10)
+    {
+        var activities = await _context.AuditLogs
+            .Include(a => a.User)
+            .OrderByDescending(a => a.Timestamp)
+            .Take(count)
+         .Select(a => new RecentActivityDto
+       {
+           Id = a.Id,
+    ActivityType = a.Action,
+         Description = $"{a.Action} on {a.EntityType}",
+         PerformedBy = a.User != null ? $"{a.User.FirstName} {a.User.LastName}" : "System",
+Timestamp = a.Timestamp,
+                EntityType = a.EntityType,
+              EntityId = a.EntityId
+     })
+   .ToListAsync();
+
+        return ApiResponse<List<RecentActivityDto>>.SuccessResponse(activities);
+    }
+
+    #endregion
+
+    #region System Settings
+
+ public async Task<ApiResponse<List<SystemSettingsDto>>> GetAllSettingsAsync(string? category = null)
+    {
+        var query = _context.SystemSettings.AsQueryable();
+
+        if (!string.IsNullOrEmpty(category))
+        {
+            query = query.Where(s => s.Category == category);
+        }
+
+        var settings = await query
+       .OrderBy(s => s.Category)
+          .ThenBy(s => s.SettingKey)
+    .Select(s => new SystemSettingsDto
+            {
+   Id = s.Id,
+      SettingKey = s.SettingKey,
+       SettingValue = s.SettingValue,
+              Description = s.Description,
+       Category = s.Category,
+       LastModified = s.LastModified ?? s.CreatedAt
+            })
+  .ToListAsync();
+
+ return ApiResponse<List<SystemSettingsDto>>.SuccessResponse(settings);
+    }
+
+    public async Task<ApiResponse<SystemSettingsDto>> GetSettingByKeyAsync(string key)
+    {
+        var setting = await _context.SystemSettings
+        .FirstOrDefaultAsync(s => s.SettingKey == key);
+
+        if (setting == null)
+        {
+            return ApiResponse<SystemSettingsDto>.ErrorResponse("Setting not found");
+  }
+
+        var dto = new SystemSettingsDto
+     {
+   Id = setting.Id,
+            SettingKey = setting.SettingKey,
+         SettingValue = setting.SettingValue,
+            Description = setting.Description,
+ Category = setting.Category,
+            LastModified = setting.LastModified ?? setting.CreatedAt
+        };
+
+    return ApiResponse<SystemSettingsDto>.SuccessResponse(dto);
+    }
+
+    public async Task<ApiResponse<SystemSettingsDto>> CreateSettingAsync(CreateSystemSettingDto dto, int userId)
+    {
+        if (await _context.SystemSettings.AnyAsync(s => s.SettingKey == dto.SettingKey))
+        {
+  return ApiResponse<SystemSettingsDto>.ErrorResponse("Setting key already exists");
+    }
+
+     var setting = new SystemSetting
+        {
+    SettingKey = dto.SettingKey,
+   SettingValue = dto.SettingValue,
+Description = dto.Description,
+    Category = dto.Category,
+  CreatedAt = DateTime.UtcNow,
+            ModifiedByUserId = userId
+        };
+
+        _context.SystemSettings.Add(setting);
+        await _context.SaveChangesAsync();
+
+        // Log activity
+        await LogActivityAsync("Create", "SystemSetting", setting.Id, userId, null, dto.SettingValue);
+
+        return ApiResponse<SystemSettingsDto>.SuccessResponse(new SystemSettingsDto
+      {
+      Id = setting.Id,
+     SettingKey = setting.SettingKey,
+  SettingValue = setting.SettingValue,
+            Description = setting.Description,
+         Category = setting.Category,
+      LastModified = setting.CreatedAt
+        }, "Setting created successfully");
+ }
+
+    public async Task<ApiResponse<SystemSettingsDto>> UpdateSettingAsync(string key, UpdateSystemSettingDto dto, int userId)
+    {
+    var setting = await _context.SystemSettings
+    .FirstOrDefaultAsync(s => s.SettingKey == key);
+
+        if (setting == null)
+  {
+  return ApiResponse<SystemSettingsDto>.ErrorResponse("Setting not found");
+      }
+
+        var oldValue = setting.SettingValue;
+     setting.SettingValue = dto.SettingValue;
+        setting.LastModified = DateTime.UtcNow;
+        setting.ModifiedByUserId = userId;
+
+        await _context.SaveChangesAsync();
+
+  // Log activity
+   await LogActivityAsync("Update", "SystemSetting", setting.Id, userId, oldValue, dto.SettingValue);
+
+        return ApiResponse<SystemSettingsDto>.SuccessResponse(new SystemSettingsDto
+        {
+   Id = setting.Id,
+     SettingKey = setting.SettingKey,
+      SettingValue = setting.SettingValue,
+       Description = setting.Description,
+    Category = setting.Category,
+         LastModified = setting.LastModified ?? setting.CreatedAt
+        }, "Setting updated successfully");
+    }
+
+    public async Task<ApiResponse<bool>> DeleteSettingAsync(string key)
+    {
+        var setting = await _context.SystemSettings
+        .FirstOrDefaultAsync(s => s.SettingKey == key);
+
+        if (setting == null)
+        {
+    return ApiResponse<bool>.ErrorResponse("Setting not found");
+        }
+
+        _context.SystemSettings.Remove(setting);
+   await _context.SaveChangesAsync();
+
+        return ApiResponse<bool>.SuccessResponse(true, "Setting deleted successfully");
+    }
+
+    #endregion
+
+    #region Audit Logs
+
+    public async Task<PagedResponse<AuditLogListDto>> GetAuditLogsAsync(
+   PaginationParams paginationParams,
+      string? entityType = null,
+        string? action = null,
+      DateTime? fromDate = null,
+        DateTime? toDate = null)
+    {
+    var query = _context.AuditLogs
+       .Include(a => a.User)
+            .AsQueryable();
+
+   if (!string.IsNullOrEmpty(entityType))
+        {
+   query = query.Where(a => a.EntityType == entityType);
+      }
+
+        if (!string.IsNullOrEmpty(action))
+        {
+            query = query.Where(a => a.Action == action);
+        }
+
+   if (fromDate.HasValue)
+        {
+          query = query.Where(a => a.Timestamp >= fromDate.Value);
+        }
+
+        if (toDate.HasValue)
+        {
+            query = query.Where(a => a.Timestamp <= toDate.Value);
+        }
+
+        var totalRecords = await query.CountAsync();
+        var totalPages = (int)Math.Ceiling(totalRecords / (double)paginationParams.PageSize);
+
+        var logs = await query
+    .OrderByDescending(a => a.Timestamp)
+            .Skip((paginationParams.PageNumber - 1) * paginationParams.PageSize)
+   .Take(paginationParams.PageSize)
+    .Select(a => new AuditLogListDto
+            {
+  Id = a.Id,
+          Action = a.Action,
+        EntityType = a.EntityType,
+     UserName = a.User != null ? $"{a.User.FirstName} {a.User.LastName}" : "System",
+   Timestamp = a.Timestamp
+          })
+      .ToListAsync();
+
+        return new PagedResponse<AuditLogListDto>
+      {
+            Data = logs,
+  PageNumber = paginationParams.PageNumber,
+            PageSize = paginationParams.PageSize,
+          TotalPages = totalPages,
+            TotalRecords = totalRecords
+        };
+    }
+
+    public async Task<ApiResponse<AuditLogDto>> GetAuditLogByIdAsync(int id)
+    {
+   var log = await _context.AuditLogs
+    .Include(a => a.User)
+            .FirstOrDefaultAsync(a => a.Id == id);
+
+   if (log == null)
+        {
+   return ApiResponse<AuditLogDto>.ErrorResponse("Audit log not found");
+        }
+
+      var dto = new AuditLogDto
+        {
+       Id = log.Id,
+   Action = log.Action,
+    EntityType = log.EntityType,
+         EntityId = log.EntityId,
+    OldValues = log.OldValues,
+            NewValues = log.NewValues,
+            UserId = log.UserId,
+            UserName = log.User != null ? $"{log.User.FirstName} {log.User.LastName}" : "System",
+            UserRole = log.User?.Role.ToString() ?? "Unknown",
+            IpAddress = log.IpAddress,
+      Timestamp = log.Timestamp
+        };
+
+        return ApiResponse<AuditLogDto>.SuccessResponse(dto);
+    }
+
+    public async Task LogActivityAsync(string action, string entityType, int? entityId, int userId, string? oldValues = null, string? newValues = null, string? ipAddress = null)
+    {
+        var log = new AuditLog
+        {
+ Action = action,
+            EntityType = entityType,
+            EntityId = entityId,
+ UserId = userId,
+  OldValues = oldValues,
+NewValues = newValues,
+IpAddress = ipAddress,
+Timestamp = DateTime.UtcNow
+        };
+
+        _context.AuditLogs.Add(log);
+        await _context.SaveChangesAsync();
+    }
+
+    #endregion
+}

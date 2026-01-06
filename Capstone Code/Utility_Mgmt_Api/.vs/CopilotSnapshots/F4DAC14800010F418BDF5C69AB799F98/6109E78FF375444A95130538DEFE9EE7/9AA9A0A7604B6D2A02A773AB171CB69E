@@ -1,0 +1,390 @@
+﻿using System.Globalization;
+using Microsoft.EntityFrameworkCore;
+using UtilityManagmentApi.Data;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Reports;
+using UtilityManagmentApi.Entities;
+using UtilityManagmentApi.Services.Interfaces;
+
+namespace UtilityManagmentApi.Services.Implementations;
+
+public class ReportService : IReportService
+{
+    private readonly ApplicationDbContext _context;
+
+    public ReportService(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<ApiResponse<DashboardSummaryDto>> GetDashboardSummaryAsync()
+    {
+        var today = DateTime.UtcNow.Date;
+        var currentMonth = today.Month;
+    var currentYear = today.Year;
+
+        var totalConsumers = await _context.Consumers.CountAsync(c => c.IsActive);
+   var activeConnections = await _context.Connections.CountAsync(c => c.Status == ConnectionStatus.Active);
+        var pendingBills = await _context.Bills.CountAsync(b =>
+          b.Status != BillStatus.Paid && b.Status != BillStatus.Cancelled && b.DueDate >= today);
+     var overdueBills = await _context.Bills.CountAsync(b =>
+            b.Status == BillStatus.Overdue || (b.DueDate < today && b.OutstandingBalance > 0));
+
+        var revenueThisMonth = await _context.Payments
+       .Where(p => p.PaymentDate.Month == currentMonth &&
+ p.PaymentDate.Year == currentYear &&
+     p.Status == PaymentStatus.Completed)
+     .SumAsync(p => p.Amount);
+
+        var totalOutstanding = await _context.Bills
+.Where(b => b.Status != BillStatus.Cancelled)
+            .SumAsync(b => b.OutstandingBalance);
+
+        // Recent activities
+        var recentBills = await _context.Bills
+     .Include(b => b.Connection)
+      .ThenInclude(c => c.Consumer)
+   .ThenInclude(co => co.User)
+            .OrderByDescending(b => b.CreatedAt)
+       .Take(5)
+    .Select(b => new RecentActivityDto
+    {
+       Type = "Bill Generated",
+ Description = $"Bill {b.BillNumber} generated for {b.Connection.Consumer.User.FirstName} {b.Connection.Consumer.User.LastName}",
+       Timestamp = b.CreatedAt
+      })
+            .ToListAsync();
+
+        var recentPayments = await _context.Payments
+            .Include(p => p.Bill)
+            .ThenInclude(b => b.Connection)
+.ThenInclude(c => c.Consumer)
+      .ThenInclude(co => co.User)
+          .OrderByDescending(p => p.CreatedAt)
+      .Take(5)
+   .Select(p => new RecentActivityDto
+      {
+        Type = "Payment Received",
+    Description = $"Payment of {p.Amount:C} received from {p.Bill.Connection.Consumer.User.FirstName} {p.Bill.Connection.Consumer.User.LastName}",
+        Timestamp = p.CreatedAt
+       })
+            .ToListAsync();
+
+  var recentActivities = recentBills
+   .Concat(recentPayments)
+            .OrderByDescending(a => a.Timestamp)
+       .Take(10)
+ .ToList();
+
+        // Consumption by utility type
+        var consumptionByType = await _context.MeterReadings
+            .Include(m => m.Connection)
+       .ThenInclude(c => c.UtilityType)
+      .Where(m => m.BillingMonth == currentMonth && m.BillingYear == currentYear)
+     .GroupBy(m => new { m.Connection.UtilityType.Name, m.Connection.UtilityType.UnitOfMeasurement })
+            .Select(g => new UtilityConsumptionDto
+{
+       UtilityType = g.Key.Name,
+    TotalConsumption = g.Sum(m => m.UnitsConsumed),
+ Unit = g.Key.UnitOfMeasurement,
+    ConnectionCount = g.Select(m => m.ConnectionId).Distinct().Count()
+       })
+   .ToListAsync();
+
+        var summary = new DashboardSummaryDto
+        {
+   TotalConsumers = totalConsumers,
+      ActiveConnections = activeConnections,
+            PendingBills = pendingBills,
+            OverdueBills = overdueBills,
+        TotalRevenueThisMonth = revenueThisMonth,
+ TotalOutstanding = totalOutstanding,
+    RecentActivities = recentActivities,
+            ConsumptionByUtilityType = consumptionByType
+        };
+
+     return ApiResponse<DashboardSummaryDto>.SuccessResponse(summary);
+    }
+
+    public async Task<ApiResponse<MonthlyRevenueReportDto>> GetMonthlyRevenueReportAsync(int month, int year)
+    {
+        var bills = await _context.Bills
+            .Include(b => b.Connection)
+      .ThenInclude(c => c.UtilityType)
+        .Where(b => b.BillingMonth == month && b.BillingYear == year && b.Status != BillStatus.Cancelled)
+      .ToListAsync();
+
+        var payments = await _context.Payments
+            .Include(p => p.Bill)
+            .ThenInclude(b => b.Connection)
+         .ThenInclude(c => c.UtilityType)
+            .Where(p => p.Bill.BillingMonth == month &&
+        p.Bill.BillingYear == year &&
+  p.Status == PaymentStatus.Completed)
+         .ToListAsync();
+
+    var byUtilityType = bills
+            .GroupBy(b => b.Connection.UtilityType.Name)
+            .Select(g => new UtilityRevenueDto
+    {
+       UtilityType = g.Key,
+       BilledAmount = g.Sum(b => b.TotalAmount),
+            Collected = payments.Where(p => p.Bill.Connection.UtilityType.Name == g.Key).Sum(p => p.Amount),
+  BillCount = g.Count()
+       })
+            .ToList();
+
+ var totalBilled = bills.Sum(b => b.TotalAmount);
+   var totalCollected = payments.Sum(p => p.Amount);
+
+        var report = new MonthlyRevenueReportDto
+        {
+            Month = month,
+         Year = year,
+          MonthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month),
+            TotalBilledAmount = totalBilled,
+    TotalCollected = totalCollected,
+          TotalOutstanding = bills.Sum(b => b.OutstandingBalance),
+    TotalBills = bills.Count,
+    PaidBills = bills.Count(b => b.Status == BillStatus.Paid),
+     CollectionRate = totalBilled > 0 ? (totalCollected / totalBilled) * 100 : 0,
+   ByUtilityType = byUtilityType
+        };
+
+     return ApiResponse<MonthlyRevenueReportDto>.SuccessResponse(report);
+    }
+
+    public async Task<ApiResponse<List<MonthlyRevenueReportDto>>> GetYearlyRevenueReportAsync(int year)
+    {
+        var reports = new List<MonthlyRevenueReportDto>();
+
+        for (int month = 1; month <= 12; month++)
+        {
+            var result = await GetMonthlyRevenueReportAsync(month, year);
+    if (result.Success && result.Data != null)
+        {
+       reports.Add(result.Data);
+          }
+        }
+
+ return ApiResponse<List<MonthlyRevenueReportDto>>.SuccessResponse(reports);
+    }
+
+    public async Task<ApiResponse<OutstandingDuesReportDto>> GetOutstandingDuesReportAsync()
+    {
+     var today = DateTime.UtcNow.Date;
+
+        var outstandingBills = await _context.Bills
+    .Include(b => b.Connection)
+            .ThenInclude(c => c.Consumer)
+         .ThenInclude(co => co.User)
+            .Where(b => b.OutstandingBalance > 0 && b.Status != BillStatus.Cancelled)
+         .ToListAsync();
+
+        // Age buckets
+      var ageBuckets = new List<OutstandingByAgeDto>
+        {
+            new OutstandingByAgeDto
+            {
+  AgeBucket = "Current (0-30 days)",
+   Amount = outstandingBills.Where(b => (today - b.DueDate).Days <= 30).Sum(b => b.OutstandingBalance),
+           Count = outstandingBills.Count(b => (today - b.DueDate).Days <= 30)
+          },
+            new OutstandingByAgeDto
+     {
+        AgeBucket = "31-60 days",
+        Amount = outstandingBills.Where(b => (today - b.DueDate).Days > 30 && (today - b.DueDate).Days <= 60).Sum(b => b.OutstandingBalance),
+         Count = outstandingBills.Count(b => (today - b.DueDate).Days > 30 && (today - b.DueDate).Days <= 60)
+      },
+            new OutstandingByAgeDto
+            {
+        AgeBucket = "61-90 days",
+            Amount = outstandingBills.Where(b => (today - b.DueDate).Days > 60 && (today - b.DueDate).Days <= 90).Sum(b => b.OutstandingBalance),
+                Count = outstandingBills.Count(b => (today - b.DueDate).Days > 60 && (today - b.DueDate).Days <= 90)
+            },
+            new OutstandingByAgeDto
+            {
+         AgeBucket = "Over 90 days",
+      Amount = outstandingBills.Where(b => (today - b.DueDate).Days > 90).Sum(b => b.OutstandingBalance),
+         Count = outstandingBills.Count(b => (today - b.DueDate).Days > 90)
+     }
+        };
+
+        // Top defaulters
+        var topDefaulters = outstandingBills
+  .GroupBy(b => new
+            {
+    b.Connection.ConsumerId,
+    b.Connection.Consumer.ConsumerNumber,
+      ConsumerName = $"{b.Connection.Consumer.User.FirstName} {b.Connection.Consumer.User.LastName}"
+            })
+    .Select(g => new ConsumerOutstandingDto
+            {
+                ConsumerId = g.Key.ConsumerId,
+       ConsumerNumber = g.Key.ConsumerNumber,
+         ConsumerName = g.Key.ConsumerName,
+                OutstandingAmount = g.Sum(b => b.OutstandingBalance),
+            OverdueBills = g.Count(b => b.DueDate < today),
+     OldestDueDate = g.Min(b => b.DueDate)
+        })
+     .OrderByDescending(d => d.OutstandingAmount)
+   .Take(10)
+   .ToList();
+
+var report = new OutstandingDuesReportDto
+   {
+        TotalOutstanding = outstandingBills.Sum(b => b.OutstandingBalance),
+            TotalOverdueAccounts = outstandingBills.Select(b => b.Connection.ConsumerId).Distinct().Count(),
+     ByAgeBucket = ageBuckets,
+            TopDefaulters = topDefaulters
+  };
+
+        return ApiResponse<OutstandingDuesReportDto>.SuccessResponse(report);
+    }
+
+    public async Task<ApiResponse<ConsumptionReportDto>> GetConsumptionReportAsync(int month, int year)
+    {
+  var readings = await _context.MeterReadings
+   .Include(m => m.Connection)
+            .ThenInclude(c => c.Consumer)
+.ThenInclude(co => co.User)
+  .Include(m => m.Connection)
+       .ThenInclude(c => c.UtilityType)
+ .Where(m => m.BillingMonth == month && m.BillingYear == year)
+      .ToListAsync();
+
+        var byUtilityType = readings
+            .GroupBy(m => new { m.Connection.UtilityType.Name, m.Connection.UtilityType.UnitOfMeasurement })
+       .Select(g => new UtilityConsumptionDetailDto
+            {
+       UtilityType = g.Key.Name,
+        Unit = g.Key.UnitOfMeasurement,
+                TotalConsumption = g.Sum(m => m.UnitsConsumed),
+    AverageConsumption = g.Average(m => m.UnitsConsumed),
+                MinConsumption = g.Min(m => m.UnitsConsumed),
+      MaxConsumption = g.Max(m => m.UnitsConsumed),
+       ConnectionCount = g.Count()
+          })
+    .ToList();
+
+        var topConsumers = readings
+    .OrderByDescending(m => m.UnitsConsumed)
+            .Take(10)
+            .Select(m => new TopConsumerDto
+            {
+       ConsumerId = m.Connection.ConsumerId,
+      ConsumerNumber = m.Connection.Consumer.ConsumerNumber,
+          ConsumerName = $"{m.Connection.Consumer.User.FirstName} {m.Connection.Consumer.User.LastName}",
+   UtilityType = m.Connection.UtilityType.Name,
+    Consumption = m.UnitsConsumed,
+            Unit = m.Connection.UtilityType.UnitOfMeasurement
+      })
+         .ToList();
+
+        var report = new ConsumptionReportDto
+  {
+ Month = month,
+        Year = year,
+            ByUtilityType = byUtilityType,
+            TopConsumers = topConsumers,
+       TotalConsumption = readings.Sum(m => m.UnitsConsumed),
+            AverageConsumption = readings.Any() ? readings.Average(m => m.UnitsConsumed) : 0
+        };
+
+        return ApiResponse<ConsumptionReportDto>.SuccessResponse(report);
+}
+
+    public async Task<ApiResponse<ConsumerBillingSummaryDto>> GetConsumerBillingSummaryAsync(int consumerId)
+    {
+        var consumer = await _context.Consumers
+            .Include(c => c.User)
+            .Include(c => c.Connections)
+            .ThenInclude(conn => conn.UtilityType)
+       .FirstOrDefaultAsync(c => c.Id == consumerId);
+
+        if (consumer == null)
+        {
+ return ApiResponse<ConsumerBillingSummaryDto>.ErrorResponse("Consumer not found");
+        }
+
+        var bills = await _context.Bills
+   .Include(b => b.Connection)
+        .ThenInclude(c => c.UtilityType)
+   .Where(b => b.Connection.ConsumerId == consumerId && b.Status != BillStatus.Cancelled)
+     .ToListAsync();
+
+        var readings = await _context.MeterReadings
+            .Where(m => m.Connection.ConsumerId == consumerId)
+      .ToListAsync();
+
+        var connectionSummaries = consumer.Connections.Select(conn => new ConnectionBillingSummaryDto
+        {
+            ConnectionId = conn.Id,
+      ConnectionNumber = conn.ConnectionNumber,
+        UtilityType = conn.UtilityType.Name,
+      BillCount = bills.Count(b => b.ConnectionId == conn.Id),
+            TotalBilled = bills.Where(b => b.ConnectionId == conn.Id).Sum(b => b.TotalAmount),
+      TotalPaid = bills.Where(b => b.ConnectionId == conn.Id).Sum(b => b.AmountPaid),
+            Outstanding = bills.Where(b => b.ConnectionId == conn.Id).Sum(b => b.OutstandingBalance),
+TotalConsumption = readings.Where(r => r.ConnectionId == conn.Id).Sum(r => r.UnitsConsumed)
+        }).ToList();
+
+  var summary = new ConsumerBillingSummaryDto
+        {
+     ConsumerId = consumer.Id,
+         ConsumerNumber = consumer.ConsumerNumber,
+            ConsumerName = $"{consumer.User.FirstName} {consumer.User.LastName}",
+    TotalBills = bills.Count,
+     TotalBilledAmount = bills.Sum(b => b.TotalAmount),
+          TotalPaid = bills.Sum(b => b.AmountPaid),
+            OutstandingBalance = bills.Sum(b => b.OutstandingBalance),
+Connections = connectionSummaries
+        };
+
+        return ApiResponse<ConsumerBillingSummaryDto>.SuccessResponse(summary);
+    }
+
+    public async Task<ApiResponse<CollectionReportDto>> GetCollectionReportAsync(DateTime fromDate, DateTime toDate)
+    {
+        var payments = await _context.Payments
+        .Where(p => p.PaymentDate >= fromDate &&
+        p.PaymentDate <= toDate &&
+                p.Status == PaymentStatus.Completed)
+            .ToListAsync();
+
+        var dailyCollections = payments
+      .GroupBy(p => p.PaymentDate.Date)
+        .Select(g => new DailyCollectionDto
+            {
+     Date = g.Key,
+        Amount = g.Sum(p => p.Amount),
+  PaymentCount = g.Count()
+     })
+     .OrderBy(d => d.Date)
+     .ToList();
+
+        var totalCollected = payments.Sum(p => p.Amount);
+
+        var byPaymentMethod = payments
+        .GroupBy(p => p.PaymentMethod.ToString())
+            .Select(g => new PaymentMethodCollectionDto
+  {
+           PaymentMethod = g.Key,
+     Amount = g.Sum(p => p.Amount),
+   Count = g.Count(),
+    Percentage = totalCollected > 0 ? (g.Sum(p => p.Amount) / totalCollected) * 100 : 0
+            })
+      .ToList();
+
+        var report = new CollectionReportDto
+        {
+            FromDate = fromDate,
+   ToDate = toDate,
+    TotalCollected = totalCollected,
+            DailyCollections = dailyCollections,
+            ByPaymentMethod = byPaymentMethod
+        };
+
+    return ApiResponse<CollectionReportDto>.SuccessResponse(report);
+    }
+}

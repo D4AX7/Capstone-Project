@@ -1,0 +1,117 @@
+﻿using Microsoft.EntityFrameworkCore;
+using UtilityManagmentApi.Data;
+using UtilityManagmentApi.Entities;
+
+namespace UtilityManagmentApi.Tests.Helpers;
+
+public static class TestDbContextFactory
+{
+    public static ApplicationDbContext CreateInMemoryContext(string databaseName)
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+      .UseInMemoryDatabase(databaseName: databaseName)
+          .Options;
+
+        var context = new ApplicationDbContext(options);
+        context.Database.EnsureCreated();
+        return context;
+    }
+
+    public static async Task SeedTestDataAsync(ApplicationDbContext context)
+    {
+  // Clear existing data
+        context.Payments.RemoveRange(context.Payments);
+        context.Bills.RemoveRange(context.Bills);
+        context.MeterReadings.RemoveRange(context.MeterReadings);
+ context.Connections.RemoveRange(context.Connections);
+        context.Consumers.RemoveRange(context.Consumers);
+        context.Users.RemoveRange(context.Users.Where(u => u.Id != 1));
+        await context.SaveChangesAsync();
+
+  // Add test users
+     var billingOfficer = new User
+        {
+   Id = 2,
+            FirstName = "Billing",
+    LastName = "Officer",
+            Email = "billing@test.com",
+    PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@123"),
+        Role = UserRole.BillingOfficer,
+   IsActive = true
+        };
+
+        var accountOfficer = new User
+    {
+       Id = 3,
+  FirstName = "Account",
+    LastName = "Officer",
+         Email = "account@test.com",
+     PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@123"),
+  Role = UserRole.AccountOfficer,
+ IsActive = true
+        };
+
+        var consumerUser = new User
+     {
+    Id = 4,
+       FirstName = "John",
+  LastName = "Doe",
+     Email = "consumer@test.com",
+       PasswordHash = BCrypt.Net.BCrypt.HashPassword("Test@123"),
+            Role = UserRole.Consumer,
+      IsActive = true
+        };
+
+   context.Users.AddRange(billingOfficer, accountOfficer, consumerUser);
+   await context.SaveChangesAsync();
+
+        // Add test consumer
+        var consumer = new Consumer
+        {
+        Id = 1,
+        UserId = consumerUser.Id,
+         ConsumerNumber = "CON240001",
+     Address = "123 Test Street",
+          City = "Test City",
+            State = "Test State",
+    PostalCode = "12345",
+    IsActive = true
+        };
+
+        context.Consumers.Add(consumer);
+        await context.SaveChangesAsync();
+
+  // Add test connection
+        var connection = new Connection
+  {
+            Id = 1,
+    ConsumerId = consumer.Id,
+       UtilityTypeId = 1, // Electricity
+ TariffPlanId = 1,
+ MeterNumber = "MTR001",
+   ConnectionNumber = "ELE240001",
+    ConnectionDate = DateTime.UtcNow.AddMonths(-6),
+            Status = ConnectionStatus.Active
+        };
+
+        context.Connections.Add(connection);
+await context.SaveChangesAsync();
+
+     // Add test meter reading
+ var meterReading = new MeterReading
+        {
+    Id = 1,
+ ConnectionId = connection.Id,
+       PreviousReading = 1000,
+            CurrentReading = 1500,
+       UnitsConsumed = 500,
+          ReadingDate = DateTime.UtcNow,
+            BillingMonth = DateTime.UtcNow.Month,
+            BillingYear = DateTime.UtcNow.Year,
+  ReadByUserId = billingOfficer.Id
+        };
+
+        context.MeterReadings.Add(meterReading);
+    await context.SaveChangesAsync();
+    }
+}

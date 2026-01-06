@@ -1,0 +1,87 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Moq;
+using System.Security.Claims;
+using UtilityManagmentApi.Controllers;
+using UtilityManagmentApi.DTOs.Common;
+using UtilityManagmentApi.DTOs.Consumer;
+using UtilityManagmentApi.Services.Interfaces;
+using Xunit;
+
+namespace UtilityManagementTest.Unit_Test.Controllers;
+
+/// <summary>
+/// Unit tests for ConsumersController
+/// </summary>
+public class ConsumersControllerTests
+{
+    private readonly Mock<IConsumerService> _mockConsumerService;
+ private readonly ConsumersController _controller;
+
+    public ConsumersControllerTests()
+    {
+  _mockConsumerService = new Mock<IConsumerService>();
+        _controller = new ConsumersController(_mockConsumerService.Object);
+    }
+
+    private void SetupUserClaims(int userId, string role)
+    {
+  var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Role, role)
+        };
+     var identity = new ClaimsIdentity(claims, "TestAuth");
+        _controller.ControllerContext = new ControllerContext
+        {
+    HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) }
+  };
+    }
+
+    [Fact]
+    public async Task GetAll_ReturnsOkResult()
+ {
+        // Arrange
+        var paginationParams = new PaginationParams { PageNumber = 1, PageSize = 10 };
+   var pagedResponse = new PagedResponse<ConsumerListDto> { Data = new List<ConsumerListDto>(), TotalRecords = 0 };
+        _mockConsumerService.Setup(s => s.GetAllAsync(paginationParams, null)).ReturnsAsync(pagedResponse);
+
+    // Act
+        var result = await _controller.GetAll(paginationParams, null);
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task GetById_AsConsumer_WithOthersId_ReturnsForbid()
+    {
+        // Arrange
+        SetupUserClaims(5, "Consumer");
+  var ownConsumer = new ConsumerDto { Id = 1, UserId = 5 };
+        _mockConsumerService.Setup(s => s.GetByUserIdAsync(5))
+        .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(ownConsumer));
+
+      // Act
+        var result = await _controller.GetById(2);
+
+      // Assert
+     Assert.IsType<ForbidResult>(result);
+    }
+
+    [Fact]
+    public async Task GetMyProfile_ReturnsOkResult()
+    {
+        // Arrange
+        SetupUserClaims(5, "Consumer");
+        var consumerDto = new ConsumerDto { Id = 1, UserId = 5 };
+  _mockConsumerService.Setup(s => s.GetByUserIdAsync(5))
+      .ReturnsAsync(ApiResponse<ConsumerDto>.SuccessResponse(consumerDto));
+
+        // Act
+        var result = await _controller.GetMyProfile();
+
+        // Assert
+        Assert.IsType<OkObjectResult>(result);
+    }
+}
