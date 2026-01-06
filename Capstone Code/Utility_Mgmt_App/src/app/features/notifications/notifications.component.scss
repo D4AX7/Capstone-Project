@@ -1,0 +1,24 @@
+.notifications__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.notifications__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.notifications__filter {
+  width: 160px;
+}
+
+.notifications__item {
+  margin-bottom: 0.75rem;
+}
+
+.notifications__item--read {
+  opacity: 0.8;
+}

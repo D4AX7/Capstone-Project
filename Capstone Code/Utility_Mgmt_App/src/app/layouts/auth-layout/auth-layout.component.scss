@@ -1,0 +1,43 @@
+// ========================================
+// ELEGANT MINIMAL AUTH LAYOUT
+// Centered Form with Cream Background
+// ========================================
+
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  padding: 2rem;
+}
+
+.auth-form-panel {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-surface);
+  border-radius: 8px;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.06);
+  padding: 3rem;
+}
+
+.form-wrapper {
+  width: 100%;
+}
+
+// ========================================
+// RESPONSIVE
+// ========================================
+
+@media (max-width: 480px) {
+  .auth-container {
+    padding: 1rem;
+    align-items: flex-start;
+    padding-top: 3rem;
+  }
+
+  .auth-form-panel {
+    padding: 2rem 1.5rem;
+    border-radius: 8px;
+  }
+}

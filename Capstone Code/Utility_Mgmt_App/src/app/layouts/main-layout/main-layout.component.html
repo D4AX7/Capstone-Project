@@ -1,0 +1,108 @@
+<div class="app-shell">
+  <!-- Top Header Bar -->
+  <header class="top-header">
+    <div class="header-left">
+      <button mat-icon-button (click)="toggleSidenav()" class="menu-toggle" matTooltip="Toggle Navigation">
+        <mat-icon>{{ drawer?.opened ? 'menu_open' : 'menu' }}</mat-icon>
+      </button>
+      <div class="brand">
+        <div class="brand-icon">
+          <mat-icon>electric_bolt</mat-icon>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">UtilityPro</span>
+          <span class="brand-tagline">Management Portal</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-center">
+      <div class="search-box" *ngIf="false">
+        <mat-icon>search</mat-icon>
+        <input type="text" placeholder="Search..." />
+      </div>
+    </div>
+
+    <div class="header-right">
+      <span class="greeting" *ngIf="currentUser$ | async as user">
+        <span class="greeting-text">Hello,</span>
+        <span class="greeting-name">{{ user.firstName }}</span>
+      </span>
+      
+      <button mat-icon-button routerLink="/notifications" matTooltip="Notifications" class="icon-btn notification-btn">
+        <mat-icon [matBadge]="unreadCount > 0 ? unreadCount : null" 
+                  matBadgeColor="warn" 
+                  matBadgeSize="small"
+                  [matBadgeHidden]="unreadCount === 0">notifications_active</mat-icon>
+      </button>
+
+      <div class="user-profile" [matMenuTriggerFor]="userMenu">
+        <div class="avatar">
+          <mat-icon>person</mat-icon>
+        </div>
+        <mat-icon class="dropdown-icon">expand_more</mat-icon>
+      </div>
+      
+      <mat-menu #userMenu="matMenu" class="user-dropdown-menu">
+        <ng-container *ngIf="currentUser$ | async as user">
+          <div class="user-menu-header">
+            <div class="user-avatar-large">
+              <mat-icon>person</mat-icon>
+            </div>
+            <div class="user-info">
+              <span class="user-name">{{ user.firstName }} {{ user.lastName }}</span>
+              <span class="user-email">{{ user.email }}</span>
+              <span class="user-role-badge">{{ user.role }}</span>
+            </div>
+          </div>
+          <mat-divider></mat-divider>
+        </ng-container>
+        <button mat-menu-item routerLink="/my-account" *ngIf="canView(['Consumer'])">
+          <mat-icon>account_circle</mat-icon>
+          <span>My Account</span>
+        </button>
+        <button mat-menu-item (click)="logout()" class="logout-item">
+          <mat-icon>logout</mat-icon>
+          <span>Sign Out</span>
+        </button>
+      </mat-menu>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <!-- Sidebar Navigation -->
+    <mat-sidenav-container class="sidenav-wrapper">
+      <mat-sidenav #drawer mode="side" opened class="sidebar">
+        <nav class="nav-menu">
+          <div class="nav-section" *ngFor="let section of navSections">
+            <h4 class="nav-section-title" *ngIf="section.title && hasVisibleItems(section.items)">{{ getSectionTitle(section.title) }}</h4>
+            <ng-container *ngFor="let item of section.items">
+              <a class="nav-item" 
+                 *ngIf="canView(item.roles)"
+                 [routerLink]="item.link" 
+                 routerLinkActive="active"
+                 (click)="navigate(item.link)">
+                <mat-icon class="nav-icon">{{ item.icon }}</mat-icon>
+                <span class="nav-label">{{ item.label }}</span>
+                <span class="nav-indicator"></span>
+              </a>
+            </ng-container>
+          </div>
+        </nav>
+        
+        <div class="sidebar-footer">
+          <div class="app-version">
+            <mat-icon>info_outline</mat-icon>
+            <span>Version 2.0.0</span>
+          </div>
+        </div>
+      </mat-sidenav>
+
+      <mat-sidenav-content class="content-area">
+        <main class="page-content">
+          <router-outlet></router-outlet>
+        </main>
+      </mat-sidenav-content>
+    </mat-sidenav-container>
+  </div>
+</div>
