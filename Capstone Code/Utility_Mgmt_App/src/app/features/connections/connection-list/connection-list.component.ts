@@ -225,7 +225,7 @@ export class ConnectionListComponent implements OnInit {
   }
 
   dataSource = new MatTableDataSource<ConnectionListItem>([]);
-  displayedColumns = ['connectionNumber', 'meterNumber', 'consumerName', 'utilityType', 'tariffPlanName', 'connectionDate', 'status', 'actions'];
+  displayedColumns: string[] = [];
 
   loading = false;
   searchTerm = '';
@@ -245,6 +245,10 @@ export class ConnectionListComponent implements OnInit {
     const user = this.authService.getCurrentUser();
     this.canEdit = user?.role === 'Admin';
     this.isAdmin = user?.role === 'Admin';
+    
+    // Set columns based on role - hide actions column for billing officers
+    const baseColumns = ['connectionNumber', 'meterNumber', 'consumerName', 'utilityType', 'tariffPlanName', 'connectionDate', 'status'];
+    this.displayedColumns = this.isAdmin ? [...baseColumns, 'actions'] : baseColumns;
   }
 
   ngOnInit(): void {

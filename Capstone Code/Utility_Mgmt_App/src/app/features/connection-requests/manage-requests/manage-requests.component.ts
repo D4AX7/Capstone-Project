@@ -151,7 +151,7 @@ import {
 
             <ng-container matColumnDef="createdAt">
               <th mat-header-cell *matHeaderCellDef>Requested</th>
-              <td mat-cell *matCellDef="let row">{{ row.createdAt | date:'short' }}</td>
+              <td mat-cell *matCellDef="let row">{{ row.createdAt | date:'M/d/yy, h:mm a' }}</td>
             </ng-container>
 
             <ng-container matColumnDef="actions">
@@ -337,7 +337,12 @@ export class ManageRequestsComponent implements OnInit {
       status: this.statusFilter
     }).subscribe({
       next: (response) => {
-        this.dataSource.data = response.data || [];
+        // Convert UTC dates to local time
+        const data = (response.data || []).map(item => ({
+          ...item,
+          createdAt: this.convertUtcToLocal(item.createdAt)
+        }));
+        this.dataSource.data = data;
         this.totalRecords = response.totalRecords;
         this.loading = false;
         this.cdr.detectChanges();
@@ -384,6 +389,13 @@ export class ManageRequestsComponent implements OnInit {
 
   getStatusClass(status: string): string {
     return status.toLowerCase();
+  }
+
+  convertUtcToLocal(utcDateString: string): string {
+    if (!utcDateString) return utcDateString;
+    // If the date string doesn't end with 'Z', append it to treat as UTC
+    const dateStr = utcDateString.endsWith('Z') ? utcDateString : utcDateString + 'Z';
+    return new Date(dateStr).toISOString();
   }
 
   viewDetails(request: ConnectionRequestListDto): void {
@@ -441,7 +453,7 @@ export class ManageRequestsComponent implements OnInit {
         </div>
         <div class="detail-row">
           <span>Requested On:</span>
-          <strong>{{ data.createdAt | date:'medium' }}</strong>
+          <strong>{{ getLocalDate(data.createdAt) | date:'medium' }}</strong>
         </div>
       </div>
 
@@ -491,7 +503,7 @@ export class ManageRequestsComponent implements OnInit {
         <h4>Processing Information</h4>
         <div class="detail-row">
           <span>Processed On:</span>
-          <strong>{{ data.processedAt | date:'medium' }}</strong>
+          <strong>{{ getLocalDate(data.processedAt) | date:'medium' }}</strong>
         </div>
         <div class="detail-row" *ngIf="data.processedByUserName">
           <span>Processed By:</span>
@@ -564,6 +576,12 @@ export class AdminRequestDetailsDialogComponent {
 
   getStatusClass(status: string): string {
     return status.toLowerCase();
+  }
+
+  getLocalDate(utcDateString: string): Date {
+    if (!utcDateString) return new Date();
+    const dateStr = utcDateString.endsWith('Z') ? utcDateString : utcDateString + 'Z';
+    return new Date(dateStr);
   }
 }
 
