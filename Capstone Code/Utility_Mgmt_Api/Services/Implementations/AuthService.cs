@@ -375,28 +375,68 @@ public class AuthService : IAuthService
             return ApiResponse<bool>.ErrorResponse("User not found");
         }
 
-        // Check if user has related data
+        // Check if user has related data that prevents deletion
         if (user.Consumer != null)
         {
             var consumerId = user.Consumer.Id;
-            var hasConnections = await _context.Connections.AnyAsync(c =>
-                c.ConsumerId == consumerId
-            );
-            var hasBills = await _context.Bills.AnyAsync(b =>
-                b.Connection.ConsumerId == consumerId
-            );
-            var hasPayments = await _context.Payments.AnyAsync(p =>
-                p.Bill.Connection.ConsumerId == consumerId
+            
+            // Check for ACTIVE connections only - Disconnected connections are OK to delete
+            var hasActiveConnections = await _context.Connections.AnyAsync(c =>
+                c.ConsumerId == consumerId && c.Status == Entities.ConnectionStatus.Active
             );
 
-            if (hasConnections || hasBills || hasPayments)
+            if (hasActiveConnections)
             {
                 return ApiResponse<bool>.ErrorResponse(
-                    "Cannot delete user with existing connections, bills, or payments. Please set the user to inactive instead."
+                    "Cannot delete user with active connections. Please disconnect all connections first."
                 );
             }
 
-            // Remove consumer profile first
+            // Check for UNPAID bills only (Due or Overdue) - Paid bills are OK
+            var hasUnpaidBills = await _context.Bills.AnyAsync(b =>
+                b.Connection.ConsumerId == consumerId && 
+                (b.Status == Entities.BillStatus.Due || b.Status == Entities.BillStatus.Overdue)
+            );
+
+            if (hasUnpaidBills)
+            {
+                return ApiResponse<bool>.ErrorResponse(
+                    "Cannot delete user with unpaid bills. Please ensure all bills are paid first."
+                );
+            }
+
+            // Safe to delete - remove all related data
+            // Remove payments first (due to foreign key constraints)
+            var payments = await _context.Payments
+                .Where(p => p.Bill.Connection.ConsumerId == consumerId)
+                .ToListAsync();
+            _context.Payments.RemoveRange(payments);
+
+            // Remove bills
+            var bills = await _context.Bills
+                .Where(b => b.Connection.ConsumerId == consumerId)
+                .ToListAsync();
+            _context.Bills.RemoveRange(bills);
+
+            // Remove meter readings
+            var meterReadings = await _context.MeterReadings
+                .Where(m => m.Connection.ConsumerId == consumerId)
+                .ToListAsync();
+            _context.MeterReadings.RemoveRange(meterReadings);
+
+            // Remove connections
+            var connections = await _context.Connections
+                .Where(c => c.ConsumerId == consumerId)
+                .ToListAsync();
+            _context.Connections.RemoveRange(connections);
+
+            // Remove connection requests
+            var connectionRequests = await _context.ConnectionRequests
+                .Where(cr => cr.ConsumerId == consumerId)
+                .ToListAsync();
+            _context.ConnectionRequests.RemoveRange(connectionRequests);
+
+            // Remove consumer profile
             _context.Consumers.Remove(user.Consumer);
             await _context.SaveChangesAsync();
         }

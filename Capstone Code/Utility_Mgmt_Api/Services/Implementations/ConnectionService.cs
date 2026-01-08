@@ -263,6 +263,7 @@ public class ConnectionService : IConnectionService
     {
         var connection = await _context
             .Connections.Include(c => c.Bills)
+                .ThenInclude(b => b.Payment)
             .Include(c => c.MeterReadings)
             .FirstOrDefaultAsync(c => c.Id == id);
 
@@ -282,15 +283,21 @@ public class ConnectionService : IConnectionService
             );
         }
 
-        if (connection.Bills.Any() || connection.MeterReadings.Any())
-        {
-            // Soft delete - disconnect (only if all bills are paid)
-            connection.Status = ConnectionStatus.Disconnected;
-            connection.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-            return ApiResponse<bool>.SuccessResponse(true, "Connection disconnected successfully");
-        }
+        // Hard delete - remove all related data since all bills are paid
+        // Remove payments first (due to foreign key constraints)
+        var payments = connection.Bills
+            .Where(b => b.Payment != null)
+            .Select(b => b.Payment!)
+            .ToList();
+        _context.Payments.RemoveRange(payments);
 
+        // Remove bills
+        _context.Bills.RemoveRange(connection.Bills);
+
+        // Remove meter readings
+        _context.MeterReadings.RemoveRange(connection.MeterReadings);
+
+        // Remove the connection itself
         _context.Connections.Remove(connection);
         await _context.SaveChangesAsync();
 
