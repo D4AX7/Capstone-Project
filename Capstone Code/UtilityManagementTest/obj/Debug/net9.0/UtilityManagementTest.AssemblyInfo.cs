@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("UtilityManagementTest")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+05dcb342b5d4e44c0e709001b9cad63f479f284c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a9851ee683e1deb4f37a4950daadade66cc7a741")]
 [assembly: System.Reflection.AssemblyProductAttribute("UtilityManagementTest")]
 [assembly: System.Reflection.AssemblyTitleAttribute("UtilityManagementTest")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

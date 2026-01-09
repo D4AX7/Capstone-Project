@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -236,13 +236,21 @@ export class ConsumerFormComponent implements OnInit {
         : null;
     };
 
+    // Custom validator for proper email format with TLD
+    const emailPatternValidator = (control: AbstractControl): ValidationErrors | null => {
+      const value = control.value;
+      if (!value) return null;
+      const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      return emailPattern.test(value) ? null : { invalidEmail: true };
+    };
+
     // Password pattern: at least 1 uppercase, 1 lowercase, 1 number, 1 special character
     const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>?]).{6,}$/;
 
     this.form = this.fb.group({
       firstName: ['', Validators.required],
       lastName: ['', Validators.required],
-      email: ['', [Validators.required, Validators.email, lowercaseEmailValidator]],
+      email: ['', [Validators.required, Validators.email, lowercaseEmailValidator, emailPatternValidator]],
       password: ['', [Validators.required, Validators.minLength(6), Validators.pattern(passwordPattern)]],
       phone: [''],
       address: ['', Validators.required],

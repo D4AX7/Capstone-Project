@@ -577,7 +577,7 @@ export class RegisterComponent {
     this.form = this.fb.group({
       firstName: ['', Validators.required],
       lastName: ['', Validators.required],
-      email: ['', [Validators.required, Validators.email, this.lowercaseValidator]],
+      email: ['', [Validators.required, Validators.email, this.lowercaseValidator, this.emailPatternValidator]],
       password: ['', [Validators.required, Validators.minLength(6)]],
       phone: [''],
       address: ['', Validators.required],
@@ -624,6 +624,15 @@ export class RegisterComponent {
       return { uppercase: true };
     }
     return null;
+  }
+
+  // Custom validator for proper email format with TLD
+  emailPatternValidator(control: AbstractControl): ValidationErrors | null {
+    const value = control.value;
+    if (!value) return null;
+    // RFC 5322 compliant email regex that requires a proper TLD
+    const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailPattern.test(value) ? null : { invalidEmail: true };
   }
 
   onSubmit(): void {

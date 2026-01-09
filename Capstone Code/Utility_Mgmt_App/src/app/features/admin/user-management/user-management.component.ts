@@ -1,6 +1,6 @@
 import { Component, OnInit, Inject, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, FormGroup, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatSortModule, MatSort } from '@angular/material/sort';
 import { MatCardModule } from '@angular/material/card';
@@ -831,13 +831,21 @@ export class UserDialogComponent {
         : null;
     };
 
+    // Custom validator for proper email format with TLD
+    const emailPatternValidator = (control: AbstractControl): ValidationErrors | null => {
+      const value = control.value;
+      if (!value) return null;
+      const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      return emailPattern.test(value) ? null : { invalidEmail: true };
+    };
+
     // Password pattern: at least 1 uppercase, 1 lowercase, 1 number, 1 special character
     const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>?]).{6,}$/;
 
     this.form = this.fb.group({
       firstName: [data?.firstName || '', Validators.required],
       lastName: [data?.lastName || '', Validators.required],
-      email: [data?.email || '', [Validators.required, Validators.email, lowercaseEmailValidator]],
+      email: [data?.email || '', [Validators.required, Validators.email, lowercaseEmailValidator, emailPatternValidator]],
       password: ['', data ? [] : [Validators.required, Validators.minLength(6), Validators.pattern(passwordPattern)]],
       phoneNumber: [data?.phoneNumber || ''],
       role: [data?.role || 'BillingOfficer', Validators.required],

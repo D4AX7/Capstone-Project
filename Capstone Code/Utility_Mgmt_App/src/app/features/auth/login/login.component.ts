@@ -1,6 +1,6 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { MatCardModule } from '@angular/material/card';
@@ -289,8 +289,16 @@ export class LoginComponent implements OnInit {
     private route: ActivatedRoute,
     private cdr: ChangeDetectorRef
   ) {
+    // Custom validator for proper email format with TLD
+    const emailPatternValidator = (control: AbstractControl): ValidationErrors | null => {
+      const value = control.value;
+      if (!value) return null;
+      const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+      return emailPattern.test(value) ? null : { invalidEmail: true };
+    };
+
     this.form = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
+      email: ['', [Validators.required, Validators.email, emailPatternValidator]],
       password: ['', [Validators.required, Validators.minLength(6)]]
     });
   }
